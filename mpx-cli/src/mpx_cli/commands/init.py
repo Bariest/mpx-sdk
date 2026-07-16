@@ -113,6 +113,7 @@ def cmd_init(args: argparse.Namespace) -> None:
         f"\trm -f src/*.wasm\n"
     )
     _write(out_dir / "Makefile", makefile)
+    
 
     # Detect and show toolchains
     print()
