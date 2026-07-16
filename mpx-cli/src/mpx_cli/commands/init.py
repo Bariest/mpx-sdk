@@ -106,9 +106,9 @@ def cmd_init(args: argparse.Namespace) -> None:
         f"validate:\n"
         f"\tmpx-cli build $(SRC) --validate\n\n"
         f"upload:\n"
-        f"\tmpx-cli upload $(WASM) --host $(MPX_HOST)\n\n"
+        f"\tmpx-cli upload $(WASM) --ip $(MPX_HOST)\n\n"
         f"run:\n"
-        f"\tmpx-cli run {name}.wasm --host $(MPX_HOST)\n\n"
+        f"\tmpx-cli run {name}.wasm --ip $(MPX_HOST)\n\n"
         f"clean:\n"
         f"\trm -f src/*.wasm\n"
     )
