@@ -1,20 +1,41 @@
-"""\
-mpx-cli — MPX-Dog Skill Development Kit
+"""mpx-cli — MPX-Dog Skill Development Kit.
 
-A Python CLI for developing, building, and deploying
-WASM skills to the MPX-Dog quadruped robot.
+This package auto-loads environment variables from ``.env`` files before
+the CLI modules read defaults. Supported locations:
 
-Commands:
-  init     Scaffold a new skill project
-  build    Compile C/WAT/TS source to .wasm
-  upload   Upload a .wasm skill to the robot
-  run      Execute a skill on the robot
-  list     List skills installed on the robot
-  delete   Delete a skill from the robot
+* the current working directory: ``./.env``
+* the installed package directory: ``src/mpx_cli/.env`` during development
 
-Environment variables:
-  MPX_HOST      Robot IP address (default: 192.168.2.1)
-  MPX_PORT      HTTP port (default: 80)
+Environment variables defined in the real process environment always win.
 """
 
-__version__ = "0.1.0"
+from __future__ import annotations
+
+import os
+from pathlib import Path
+
+
+def _load_env_file(path: Path) -> None:
+    if not path.exists():
+        return
+
+    try:
+        for line in path.read_text().splitlines():
+            stripped = line.strip()
+            if not stripped or stripped.startswith("#") or "=" not in stripped:
+                continue
+
+            key, value = stripped.split("=", 1)
+            key = key.strip()
+            value = value.strip().strip('"').strip("'")
+            if key and key not in os.environ:
+                os.environ[key] = value
+    except OSError:
+        return
+
+
+_PACKAGE_DIR = Path(__file__).resolve().parent
+_load_env_file(Path.cwd() / ".env")
+_load_env_file(_PACKAGE_DIR / ".env")
+
+__version__ = "0.2.0"

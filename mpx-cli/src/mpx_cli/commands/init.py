@@ -99,7 +99,7 @@ def cmd_init(args: argparse.Namespace) -> None:
         f"# Convenience wrapper around mpx-cli.\n\n"
         f"MPX_HOST ?= 192.168.2.1\n"
         f"SRC := src/{name}.{ext}\n"
-        f"WASM := src/{name}.wasm\n\n"
+        f"WASM := build/{name}.wasm\n\n"
         f".PHONY: build validate upload run clean\n\n"
         f"build:\n"
         f"\tmpx-cli build $(SRC)\n\n"
@@ -110,10 +110,24 @@ def cmd_init(args: argparse.Namespace) -> None:
         f"run:\n"
         f"\tmpx-cli run {name}.wasm --ip $(MPX_HOST)\n\n"
         f"clean:\n"
-        f"\trm -f src/*.wasm\n"
+        f"\trm -f build/*.wasm\n"
     )
     _write(out_dir / "Makefile", makefile)
-    
+
+    # Write manifest.json (for marketplace publishing)
+    import json
+    manifest = {
+        "slug": name,
+        "title": f"{name} — MPX-Dog skill",
+        "skill_type": "WASM",
+        "version": "1.0.0",
+        "readme": f"A WASM skill for the MPX-Dog quadruped robot.",
+    }
+    _write(out_dir / "manifest.json", json.dumps(manifest, indent=2) + "\n")
+
+    # Create build/ directory (ready for compile output)
+    build_dir = out_dir / "build"
+    build_dir.mkdir(parents=True, exist_ok=True)
 
     # Detect and show toolchains
     print()

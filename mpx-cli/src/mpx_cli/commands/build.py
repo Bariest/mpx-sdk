@@ -17,7 +17,7 @@ def add_build_parser(sub: argparse._SubParsersAction) -> None:
     p.add_argument("source", nargs="?", help="Source file (.c, .wat, .ts)")
     p.add_argument(
         "-o", "--output", default=None,
-        help="Output .wasm path (default: source path with .wasm extension)",
+        help="Output .wasm path (default: build/<name>.wasm)",
     )
     p.add_argument(
         "--validate", action="store_true",
@@ -31,6 +31,11 @@ def add_build_parser(sub: argparse._SubParsersAction) -> None:
         "--show-toolchains", action="store_true",
         help="List detected toolchains and exit",
     )
+
+
+def _default_build_output(source: Path) -> Path:
+    """Default output path: ``build/<stem>.wasm`` alongside the source."""
+    return source.parent.parent / "build" / f"{source.stem}.wasm"
 
 
 def cmd_build(args: argparse.Namespace) -> None:
@@ -53,11 +58,11 @@ def cmd_build(args: argparse.Namespace) -> None:
         print(f"❌ Source file not found: {source}")
         return
 
-    # Ensure output directory exists
-    if args.output:
-        Path(args.output).parent.mkdir(parents=True, exist_ok=True)
+    # Default output: build/<name>.wasm (a sibling of src/)
+    output_path = args.output or str(_default_build_output(source))
+    Path(output_path).parent.mkdir(parents=True, exist_ok=True)
 
-    result = compile_file(str(source), args.output)
+    result = compile_file(str(source), output_path)
     print(result.message)
 
     if not result.success:
