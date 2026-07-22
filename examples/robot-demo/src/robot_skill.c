@@ -63,6 +63,16 @@ void on_start(void)
     robot_turn_left(2000);
 
     /* ── Step 7: Jump ──────────────────────────────────────── */
+    log_msg("robot_skill: roll, pitch, yaw\n");
+    robot_roll(10.0f);
+    robot_delay_ms(600);
+    robot_pitch(10.0f);
+    robot_delay_ms(600);
+    robot_yaw(15.0f);
+    robot_delay_ms(600);
+    robot_reset_attitude();
+    robot_delay_ms(400);
+
     log_msg("robot_skill: jump\n");
     robot_jump();
 
