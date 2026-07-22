@@ -22,6 +22,7 @@ WAMR signature (the type string the firmware uses to register it), and a descrip
 |----------|----------|-------------|
 | `robot_gait(name)` | `($)` | Start a named gait (see [Gait names](#gait-names) below). |
 | `robot_get_mode()` | `()i` | Returns the current gait mode as an integer (maps to [`GaitCmd`](#gait-enum) enum). |
+| `robot_set_body_pose(roll, pitch, yaw)` | `(fff)` | Hold a Stanford-IK body attitude in degrees. Safe limits: roll +/-25, pitch +/-20, yaw +/-30. |
 
 #### Gait names
 
@@ -65,6 +66,12 @@ WAMR signature (the type string the firmware uses to register it), and a descrip
 | `"moveRF"` | Move right front leg |
 | `"moveLB"` | Move left back leg |
 | `"moveRB"` | Move right back leg |
+| `"stanford"` | Stanford trot |
+| `"frontkick"` | Front kick, then return to stand |
+| `"wiggle"` | Rear-up tail wiggle |
+| `"buttshrug"` | Distinct front-up butt shrug |
+| `"wiggleL"` / `"wiggleR"` | Hold a one-sided wiggle |
+| `"buttshrugL"` / `"buttshrugR"` | Hold a one-sided butt shrug |
 
 ### Configuration
 
@@ -291,6 +298,29 @@ One-liner actions that combine gait + delay + stop:
 | `robot_move_rf(ms)` | `moveRF(ms)` | Move right front leg for N ms |
 | `robot_move_lb(ms)` | `moveLB(ms)` | Move left back leg for N ms |
 | `robot_move_rb(ms)` | `moveRB(ms)` | Move right back leg for N ms |
+| `robot_stanford_walk(ms)` | - | Stanford trot for N ms |
+| `robot_front_kick()` | - | Perform one front kick |
+| `robot_wiggle(ms)` | - | Wiggle for N ms |
+| `robot_butt_shrug(ms)` | - | Butt shrug for N ms (separate trajectory) |
+
+### Angle-Only Body Attitude
+
+The firmware performs the inverse kinematics, so a skill only supplies angles:
+
+```c
+robot_roll(12.0f);                 // roll only
+robot_delay_ms(1000);
+robot_pitch(-10.0f);               // pitch only
+robot_delay_ms(1000);
+robot_yaw(20.0f);                  // yaw only
+robot_delay_ms(1000);
+robot_attitude(8.0f, -6.0f, 15.0f); // combined roll, pitch, yaw
+robot_delay_ms(1500);
+robot_reset_attitude();
+```
+
+Each call holds the requested pose until another attitude or movement API is
+called. Out-of-range angles are clamped by firmware for servo safety.
 
 ### Full Pose Helper
 

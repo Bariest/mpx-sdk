@@ -104,6 +104,12 @@ static inline void MPX_print(const char *str, int len) {
  *   "moveRF"     Move right front leg
  *   "moveLB"     Move left back leg
  *   "moveRB"     Move right back leg
+ *   "stanford"   Stanford trot
+ *   "frontkick"  Front kick (auto-return)
+ *   "wiggle"     Rear-up tail wiggle
+ *   "buttshrug"  Front-up butt shrug
+ *   "wiggleL" / "wiggleR"       One-sided wiggle
+ *   "buttshrugL" / "buttshrugR" One-sided butt shrug
  */
 extern void robot_gait(int name_ptr);
 
@@ -116,6 +122,39 @@ extern void robot_gait(int name_ptr);
  * @return Gait mode: 0=None, 1=Init, 2=Step, ...
  */
 extern int robot_get_mode(void);
+
+/**
+ * @brief Hold a body attitude using Stanford IK.
+ *
+ * Angles are in degrees and firmware-clamped to safe limits:
+ * roll +/-25, pitch +/-20, yaw +/-30.
+ * WAMR sig: "(fff)"
+ */
+extern void robot_set_body_pose(float roll_deg, float pitch_deg, float yaw_deg);
+
+/**
+ * @brief Set the roll/pitch/yaw slew speed in degrees per second.
+ *
+ * Wasm import:  extern void robot_set_attitude_speed(int dps);
+ * WAMR sig:     "(i)"
+ *
+ * 0 (default) = instant: poses snap straight to the target.
+ * >0 makes robot_roll/pitch/yaw/attitude GLIDE to the target at this speed,
+ * so repeated pose updates ease smoothly instead of jumping. Persists until
+ * changed, so set it once near the start of your skill.
+ */
+extern void robot_set_attitude_speed(int dps);
+/**
+ * @brief Per-axis roll/pitch/yaw slew speed in degrees per second.
+ *
+ * Wasm import:  extern void robot_set_attitude_speed_xyz(int roll_dps,
+ *                   int pitch_dps, int yaw_dps);
+ * WAMR sig:     "(iii)"
+ *
+ * Like robot_set_attitude_speed() but each axis has its own speed, so e.g.
+ * yaw can glide slowly while roll/pitch stay instant. 0 on an axis = snap.
+ */
+extern void robot_set_attitude_speed_xyz(int roll_dps, int pitch_dps, int yaw_dps);
 
 /* ── Configuration ───────────────────────────────────────────── */
 
@@ -429,6 +468,14 @@ typedef enum {
     GAIT_MOVE_RF      = 35,
     GAIT_MOVE_LB      = 36,
     GAIT_MOVE_RB      = 37,
+    GAIT_STANFORD     = 38,
+    GAIT_FRONT_KICK   = 39,
+    GAIT_WIGGLE       = 40,
+    GAIT_BUTT_SHRUG   = 41,
+    GAIT_WIGGLE_L     = 42,
+    GAIT_WIGGLE_R     = 43,
+    GAIT_BUTT_SHRUG_L = 44,
+    GAIT_BUTT_SHRUG_R = 45,
 } robot_gait_t;
 
 /**
@@ -479,8 +526,16 @@ static inline void robot_gait_enum(robot_gait_t g) {
         "moveRF",    /* 35 GAIT_MOVE_RF      */
         "moveLB",    /* 36 GAIT_MOVE_LB      */
         "moveRB",    /* 37 GAIT_MOVE_RB      */
+        "stanford",  /* 38 GAIT_STANFORD     */
+        "frontkick", /* 39 GAIT_FRONT_KICK   */
+        "wiggle",    /* 40 GAIT_WIGGLE       */
+        "buttshrug", /* 41 GAIT_BUTT_SHRUG   */
+        "wiggleL",   /* 42 GAIT_WIGGLE_L     */
+        "wiggleR",   /* 43 GAIT_WIGGLE_R     */
+        "buttshrugL",/* 44 GAIT_BUTT_SHRUG_L */
+        "buttshrugR",/* 45 GAIT_BUTT_SHRUG_R */
     };
-    if (g >= GAIT_NONE && g <= GAIT_MOVE_RB) {
+    if (g >= GAIT_NONE && g <= GAIT_BUTT_SHRUG_R) {
         robot_gait((int)names[(int)g]);
     }
 }
@@ -777,6 +832,60 @@ static inline void robot_move_rb(int ms) {
     robot_gait_enum(GAIT_NONE);
 }
 
+/** Walk using the Stanford trot for N ms. */
+static inline void robot_stanford_walk(int ms) {
+    robot_gait_enum(GAIT_STANFORD);
+    robot_delay_ms(ms);
+    robot_gait_enum(GAIT_NONE);
+}
+
+/** Perform one front kick. */
+static inline void robot_front_kick(void) {
+    robot_gait_enum(GAIT_FRONT_KICK);
+    robot_delay_ms(2000);
+}
+
+/** Wiggle the raised rear for N ms. */
+static inline void robot_wiggle(int ms) {
+    robot_gait_enum(GAIT_WIGGLE);
+    robot_delay_ms(ms);
+    robot_gait_enum(GAIT_NONE);
+}
+
+/** Perform the distinct front-up butt shrug for N ms. */
+static inline void robot_butt_shrug(int ms) {
+    robot_gait_enum(GAIT_BUTT_SHRUG);
+    robot_delay_ms(ms);
+    robot_gait_enum(GAIT_NONE);
+}
+
+/** Hold any roll/pitch/yaw combination; the next movement interrupts it. */
+static inline void robot_attitude(float roll_deg, float pitch_deg, float yaw_deg) {
+    robot_set_body_pose(roll_deg, pitch_deg, yaw_deg);
+}
+
+/** Angle-only body controls, matching the reference movement API. */
+static inline void robot_roll(float angle_deg)  { robot_set_body_pose(angle_deg, 0.0f, 0.0f); }
+static inline void robot_pitch(float angle_deg) { robot_set_body_pose(0.0f, angle_deg, 0.0f); }
+static inline void robot_yaw(float angle_deg)   { robot_set_body_pose(0.0f, 0.0f, angle_deg); }
+static inline void robot_reset_attitude(void)   { robot_gait((int)"none"); }
+
+/** Set the roll/pitch/yaw glide speed in degrees/second (0 = instant snap).
+ *  Float-friendly wrapper around robot_set_attitude_speed(). */
+static inline void robot_attitude_speed(float dps) { robot_set_attitude_speed((int)dps); }
+
+/** Per-axis glide speed in degrees/second (0 on an axis = instant snap). */
+static inline void robot_attitude_speed_xyz(float roll_dps, float pitch_dps, float yaw_dps) {
+    robot_set_attitude_speed_xyz((int)roll_dps, (int)pitch_dps, (int)yaw_dps);
+}
+
+/** Set the glide speed AND move to a pose in one call. */
+static inline void robot_attitude_at(float roll_deg, float pitch_deg,
+                                     float yaw_deg, float dps) {
+    robot_set_attitude_speed((int)dps);
+    robot_set_body_pose(roll_deg, pitch_deg, yaw_deg);
+}
+
 // ──── 6. Full pose helper (all 12 servos at once) ────────────
 
 typedef struct {
@@ -836,81 +945,8 @@ static inline void MPX_print_int(int value) {
 }
 
 /* ═══════════════════════════════════════════════════════════════════
- *  Quick reference — all functions:
- *
- *  ── Raw imports (Part 1) ──────────────────────────────────
- *   void   print(int ptr, int len);
- *   void   robot_gait(int name_ptr);
- *   int    robot_get_mode(void);
- *   void   robot_set_config(int period, int height,
- *                           int up_height, int stride, int tilt);
- *   int    robot_get_period(void);
- *   int    robot_get_height(void);
- *   int    robot_get_up_height(void);
- *   int    robot_get_stride(void);
- *   int    robot_get_tilt(void);
- *   void   robot_set_servo_angle(int id, int centideg);
- *   void   robot_flush(void);
- *   void   robot_set_servo_speed(int id, int speed);
- *   int    robot_read_position(int id);
- *   int    robot_read_speed(int id);
- *   int    robot_read_load(int id);
- *   int    robot_read_voltage(int id);
- *   int    robot_read_temperature(int id);
- *   int    robot_read_moving(int id);
- *   int    robot_read_current(int id);
- *   void   robot_set_offset(int id, int centideg);
- *   int    robot_get_offset(int id);
- *   int    robot_ping_servo(int id);
- *   void   robot_delay_ms(int ms);
- *   void   robot_ik_fr(float x, float th0, float z);
- *   void   robot_ik_fl(float x, float th0, float z);
- *   void   robot_ik_rr(float x, float th0, float z);
- *   void   robot_ik_rl(float x, float th0, float z);
- *   void   robot_imu_read(int buffer_ptr);
- *   void   robot_imu_print(void);
- *
- *  ── High-level (Part 2) ───────────────────────────────────
- *   void   robot_gait_enum(robot_gait_t g);
- *   void   robot_set_servo_deg(robot_servo_t id, float deg);
- *   void   robot_set_servo_raw(robot_servo_t id, int raw);
- *   void   robot_set_servo(robot_servo_t id, float deg, int speed);
- *   void   robot_set_config_ex(robot_config_t cfg);
- *   robot_config_t robot_get_config_ex(void);
- *   void   robot_walk_forward(int ms);
- *   void   robot_walk_backward(int ms);
- *   void   robot_turn_left(int ms);
- *   void   robot_turn_right(int ms);
- *   void   robot_strafe_left(int ms);
- *   void   robot_strafe_right(int ms);
- *   void   robot_jump(void);
- *   void   robot_stand(void);
- *   void   robot_dance(int ms);
- *   void   robot_step_in_place(int ms);
- *   void   robot_look_up(int ms);
- *   void   robot_look_down(int ms);
- *   void   robot_look_left(int ms);
- *   void   robot_look_right(int ms);
- *   void   robot_look_upper_left(int ms);
- *   void   robot_look_upper_right(int ms);
- *   void   robot_look_lower_left(int ms);
- *   void   robot_look_lower_right(int ms);
- *   void   robot_foreleg_lift_left(int ms);
- *   void   robot_foreleg_lift_right(int ms);
- *   void   robot_backleg_lift_left(int ms);
- *   void   robot_backleg_lift_right(int ms);
- *   void   robot_height_up(int ms);
- *   void   robot_height_down(int ms);
- *   void   robot_balance(int ms);
- *   void   robot_bow_back(int ms);
- *   void   robot_body_cycle(int ms);
- *   void   robot_head_ellipse(int ms);
- *   void   robot_move_lf(int ms);
- *   void   robot_move_rf(int ms);
- *   void   robot_move_lb(int ms);
- *   void   robot_move_rb(int ms);
- *   void   robot_apply_pose(robot_pose_t p);
- *   void   MPX_print_int(int value);
+ *  Quick reference: see the declarations above for the full function list
+ *  (raw imports in Part 1, high-level helpers in Part 2).
  * ═══════════════════════════════════════════════════════════════════ */
 
 #ifdef __cplusplus
