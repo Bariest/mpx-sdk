@@ -53,8 +53,8 @@ def cmd_robot(args: argparse.Namespace) -> None:
     if skills:
         print(f"📋 Assigned skills ({len(skills)}):")
         for s in skills:
-            sid = s.get("skill_id", "?")
-            ver = s.get("version", s.get("latest_version", "?"))
+            sid = s.get("id", s.get("skill_id", "?"))
+            ver = s.get("current_version", s.get("version", s.get("latest_version", "?")))
             print(f"   • {sid} (v{ver})")
     else:
         print("📭 No skills assigned to this robot")

@@ -37,12 +37,24 @@ def cmd_info(args: argparse.Namespace) -> None:
         print(json.dumps(skill, indent=2))
         return
 
+    # Helper: extract username from id (format: username~slug)
+    def _author() -> str:
+        raw = skill.get("username", skill.get("author", None))
+        if raw:
+            return raw
+        sid = skill.get("id", skill.get("skill_id", ""))
+        if sid and "~" in sid:
+            return sid.split("~")[0]
+        return "?"
+
     # Formatted output
+    sid = skill.get("id", skill.get("skill_id", "?"))
+    ver = skill.get("current_version", skill.get("version", skill.get("latest_version", "?")))
     print(f"📦 {skill.get('title', '?')}")
-    print(f"   ID:          {skill.get('skill_id', '?')}")
+    print(f"   ID:          {sid}")
     print(f"   Slug:        {skill.get('slug', '?')}")
-    print(f"   Author:      {skill.get('username', skill.get('author', '?'))}")
-    print(f"   Version:     {skill.get('version', skill.get('latest_version', '?'))}")
+    print(f"   Author:      {_author()}")
+    print(f"   Version:     {ver}")
     print(f"   Type:        {skill.get('skill_type', '?')}")
     print(f"   Language:    {skill.get('source_language', '?')}")
     print(f"   Description: {skill.get('description', skill.get('readme', '(no description)'))}")
