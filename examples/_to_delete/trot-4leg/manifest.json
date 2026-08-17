@@ -1,0 +1,7 @@
+{
+  "slug": "trot_4leg",
+  "title": "Four-leg trot — the MuJoCo worked example",
+  "skill_type": "WASM",
+  "version": "1.0.0",
+  "readme": "A diagonal trot on all four legs, used to demonstrate physics simulation. It deliberately falls over."
+}

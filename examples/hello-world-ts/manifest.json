@@ -1,0 +1,7 @@
+{
+  "slug": "hello_world_ts",
+  "title": "Hello World (AssemblyScript)",
+  "skill_type": "WASM",
+  "version": "1.0.0",
+  "readme": "The hello-world skill written in AssemblyScript instead of C."
+}

@@ -10,11 +10,15 @@ from mpx_cli.sdk.toolchain import (
     inspect_wasm,
     validate_wasm,
 )
+from mpx_cli.sdk.project import MANIFEST_NAME, describe_missing, find_project
 
 
 def add_build_parser(sub: argparse._SubParsersAction) -> None:
     p = sub.add_parser("build", help="Compile a C/WAT/TS source file to .wasm")
-    p.add_argument("source", nargs="?", help="Source file (.c, .wat, .ts)")
+    p.add_argument(
+        "source", nargs="?",
+        help="Source file (default: src/<slug>.<ext> from manifest.json)",
+    )
     p.add_argument(
         "-o", "--output", default=None,
         help="Output .wasm path (default: build/<name>.wasm)",
@@ -33,6 +37,63 @@ def add_build_parser(sub: argparse._SubParsersAction) -> None:
     )
 
 
+def _resolve_source(args: argparse.Namespace) -> Path:
+    """Explicit path wins; otherwise derive it from the project manifest.
+
+    A DIRECTORY is accepted too, and means "that project". `mpx-cli deploy
+    four-ways` is the obvious thing to type from one level up, and it used to
+    fail with "Unsupported extension ''" — an error about a file extension,
+    when the real answer is that a directory is a perfectly reasonable thing
+    to point at.
+    """
+    if args.source:
+        given = Path(args.source)
+
+        if given.is_dir():
+            # Deliberately not find_project(given): that walks *up*, so
+            # pointing at a directory which is merely inside a project would
+            # silently build the parent's skill instead of saying "there is
+            # nothing here".
+            project = (
+                find_project(given)
+                if (given / MANIFEST_NAME).is_file()
+                else None
+            )
+            if project is None:
+                raise RuntimeError(
+                    f"'{given}' has no {MANIFEST_NAME}, so there is no skill "
+                    f"here to build.\n"
+                    f"   Pass a source file instead, or run 'mpx-cli init' to "
+                    f"create a project."
+                )
+            source = project.source
+            if source is None:
+                raise RuntimeError(
+                    f"'{given}' declares slug '{project.slug}' but has no "
+                    f"matching source under {project.root / 'src'}.\n"
+                    f"   Expected one of: {project.slug}.c / .cc / .cpp / .wat / .ts"
+                )
+            print(f"📦 {project.slug} (from {project.root / MANIFEST_NAME})")
+            return source
+
+        return given
+
+    project = find_project()
+    if project is None:
+        raise RuntimeError(describe_missing("source file"))
+
+    source = project.source
+    if source is None:
+        raise RuntimeError(
+            f"No source file matching slug '{project.slug}' under "
+            f"{project.root / 'src'}.\n"
+            f"   Expected one of: {project.slug}.c / .cc / .cpp / .wat / .ts"
+        )
+
+    print(f"📦 {project.slug} (from {project.root / 'manifest.json'})")
+    return source
+
+
 def _default_build_output(source: Path) -> Path:
     """Default output path: ``build/<stem>.wasm`` alongside the source."""
     return source.parent.parent / "build" / f"{source.stem}.wasm"
@@ -49,14 +110,13 @@ def cmd_build(args: argparse.Namespace) -> None:
             print(f"  {tc.name:<20s} {status}")
         return
 
-    if not args.source:
-        print("❌ No source file specified")
-        return
+    source = _resolve_source(args)
 
-    source = Path(args.source)
     if not source.exists():
-        print(f"❌ Source file not found: {source}")
-        return
+        # Raise rather than print-and-return: cli.py turns an exception into
+        # exit code 1, and a silent success here is what lets
+        # `make build && make upload` push a stale binary.
+        raise RuntimeError(f"Source file not found: {source}")
 
     # Default output: build/<name>.wasm (a sibling of src/)
     output_path = args.output or str(_default_build_output(source))
@@ -68,7 +128,7 @@ def cmd_build(args: argparse.Namespace) -> None:
     if not result.success:
         if result.stderr:
             print(result.stderr, end="")
-        return
+        raise RuntimeError("Build failed")
 
     if result.output_path:
         wasm_path = Path(result.output_path)

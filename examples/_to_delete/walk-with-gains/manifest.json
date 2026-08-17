@@ -1,0 +1,7 @@
+{
+  "slug": "walk_with_gains",
+  "title": "Tune Kp/Kd, then walk with them",
+  "skill_type": "WASM",
+  "version": "1.0.0",
+  "readme": "Tune Kp/Kd, then walk with them. See README.md."
+}

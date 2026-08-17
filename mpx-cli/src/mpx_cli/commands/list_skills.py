@@ -7,21 +7,13 @@ from mpx_cli.sdk.connection import RobotClient, RobotError
 
 
 def add_list_parser(sub: argparse._SubParsersAction) -> None:
+    from mpx_cli.cli import robot_opts
+
     p = sub.add_parser(
         "list",
         aliases=["ls"],
+        parents=[robot_opts()],
         help="List skills installed on the robot",
-    )
-    p.add_argument(
-        "--ip", "-i",
-        default=None,
-        help="Robot IP address (default: 192.168.2.1)",
-    )
-    p.add_argument(
-        "--port", "-p",
-        type=int,
-        default=None,
-        help="Robot HTTP port (default: 80)",
     )
     p.add_argument(
         "--all", "-a",
@@ -31,10 +23,7 @@ def add_list_parser(sub: argparse._SubParsersAction) -> None:
 
 
 def cmd_list(args: argparse.Namespace) -> None:
-    client = RobotClient(
-        host=args.ip or "192.168.2.1",
-        port=args.port or 80,
-    )
+    client = RobotClient(host=args.ip, port=args.port)
 
     try:
         if args.all:

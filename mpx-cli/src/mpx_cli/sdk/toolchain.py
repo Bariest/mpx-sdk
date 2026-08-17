@@ -161,12 +161,23 @@ def _compile_c(source: str, output: str | None) -> CompileResult:
         "-o", str(out),
     ]
 
-    # Auto-add -I flags for nearby include/ directories
+    # Auto-add -I flags for nearby include/ directories.
+    #
+    # The packaged resource dir is the last resort: `mpx-cli init` vendors a
+    # copy of mpx_host.h into each new project, but the bundled examples (and
+    # any project that would rather not vendor a 40 KB header) have none. The
+    # CLI always ships the canonical copy, so falling back to it means
+    # `mpx-cli build` works anywhere without -I, and there is one source of
+    # truth instead of N drifting copies. A project-local include/ still comes
+    # first, so vendoring still wins.
+    _packaged_headers = Path(__file__).resolve().parent.parent / "commands" / "resource"
+
     seen: set[Path] = set()
     for candidate in [
         src.parent / "include",
         src.parent.parent / "include",
         Path.cwd() / "include",
+        _packaged_headers,
     ]:
         resolved = candidate.resolve()
         if resolved.is_dir() and resolved not in seen:

@@ -7,10 +7,15 @@
 ## Quick Start
 
 ```bash
-mpx-cli build src/{name}.wat
-mpx-cli build src/{name}.wat --validate
-mpx-cli upload src/{name}.wasm
-mpx-cli run {name}.wasm
+# Build, upload and run — the whole loop. Paths come from
+# manifest.json, so no arguments are needed.
+mpx-cli deploy
+
+# Variations
+mpx-cli deploy --no-run          # push without executing
+mpx-cli deploy --ip 10.0.0.5     # a robot at another address
+mpx-cli build                    # compile only
+mpx-cli build --validate         # compile, then run wasm-validate
 ```
 
 ## Host Functions

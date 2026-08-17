@@ -12,9 +12,11 @@ from __future__ import annotations
 import json
 import os
 from typing import Any
-from urllib.error import URLError
-from urllib.parse import urljoin
+from urllib.error import HTTPError, URLError
+from urllib.parse import quote, urljoin
 from urllib.request import Request, urlopen
+
+from mpx_cli.sdk.auth import read_token
 
 # ── Defaults (overridable via environment variables) ───────────────
 DEFAULT_GATEWAY_URL = os.environ.get("MPX_GATEWAY_URL", "http://localhost:8080")
@@ -160,6 +162,70 @@ class GatewayClient:
         if "versions" in result:
             return list(result["versions"])
         return []
+
+    def download_artifact(self, skill_id: str, version: str | None = None,
+                          url: str | None = None) -> bytes:
+        """Fetch a published skill's .wasm bytes.
+
+        THE ENDPOINT IS NOT KNOWN FOR CERTAIN. The gateway is a separate
+        service that is not in this repository, and nothing in the CLI ever
+        downloaded an artifact before — `publish` uploads base64 and that is
+        the only direction that existed. Rather than hardcode a guess and fail
+        obscurely, this tries the plausible routes in order and, if they all
+        miss, says exactly what it tried so the gateway can grow the right one.
+
+        Order:
+          1. an explicit --url, if the caller passed one
+          2. an artifact URL carried in the skill's manifest
+          3. GET /v1/skills/{id}/artifact  (the conventional shape)
+          4. GET /v1/skills/{id}/download
+        """
+        attempts: list[str] = []
+
+        if url:
+            attempts.append(url)
+        else:
+            # The manifest is the gateway's own description of the skill, so if
+            # it names a location that is authoritative and version-correct.
+            try:
+                manifest = self.get_manifest(skill_id, version)
+                for key in ("artifact_url", "download_url", "wasm_url", "url"):
+                    value = manifest.get(key)
+                    if isinstance(value, str) and value.startswith("http"):
+                        attempts.append(value)
+                        break
+            except GatewayError:
+                pass  # no manifest is not fatal; fall through to conventions
+
+            quoted = quote(skill_id, safe="")
+            suffix = f"?version={quote(version)}" if version else ""
+            attempts.append(f"{self._base}/v1/skills/{quoted}/artifact{suffix}")
+            attempts.append(f"{self._base}/v1/skills/{quoted}/download{suffix}")
+
+        errors: list[str] = []
+        for candidate in attempts:
+            try:
+                req = Request(candidate, method="GET")
+                token = read_token()
+                if token:
+                    req.add_header("Authorization", f"Bearer {token}")
+                with urlopen(req, timeout=60) as resp:
+                    data = resp.read()
+                if data:
+                    return data
+                errors.append(f"{candidate}: empty response")
+            except HTTPError as e:
+                errors.append(f"{candidate}: HTTP {e.code}")
+            except URLError as e:
+                errors.append(f"{candidate}: {e.reason}")
+
+        detail = "\n".join(f"     - {e}" for e in errors)
+        raise GatewayError(
+            "Could not download the skill artifact. Tried:\n"
+            f"{detail}\n"
+            "   If your gateway serves artifacts from a different path, pass it "
+            "with --url, or add /v1/skills/{id}/artifact to the gateway."
+        )
 
     def get_manifest(self, skill_id: str, version: str | None = None) -> dict[str, Any]:
         """Get the manifest/readme for a skill.

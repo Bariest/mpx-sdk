@@ -1,0 +1,7 @@
+{
+  "slug": "easytest",
+  "title": "easytest \u2014 MPX-Dog skill",
+  "skill_type": "WASM",
+  "version": "1.0.0",
+  "readme": "A WASM skill for the MPX-Dog quadruped robot."
+}

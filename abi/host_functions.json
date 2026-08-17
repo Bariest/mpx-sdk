@@ -1,0 +1,514 @@
+{
+  "abi_version": 2,
+  "symbol_count": 49,
+  "_note": "Single source of truth for the host ABI. Generated from the firmware table by tools/gen_abi.py --extract; from here on it is authoritative and `--check` fails the build on drift.",
+  "types": {
+    "i": "i32",
+    "f": "f32",
+    "$": "NUL-terminated string pointer"
+  },
+  "error_codes": {
+    "MPX_OK": 0,
+    "MPX_ERR_ARG": -1,
+    "MPX_ERR_NOT_LOCKED": -2,
+    "MPX_ERR_NO_REPLY": -3,
+    "MPX_ERR_READONLY": -4,
+    "MPX_ERR_CANCELLED": -5,
+    "MPX_ERR_STATE": -6
+  },
+  "symbols": [
+    {
+      "name": "mpx_abi_version",
+      "host_fn": "host_mpx_abi_version",
+      "signature": "()i",
+      "params": [],
+      "result": "i",
+      "category": "ABI"
+    },
+    {
+      "name": "print",
+      "host_fn": "host_print",
+      "signature": "($i)i",
+      "params": [
+        "$",
+        "i"
+      ],
+      "result": "i",
+      "category": "SDK"
+    },
+    {
+      "name": "robot_gait",
+      "host_fn": "host_robot_gait",
+      "signature": "($)i",
+      "params": [
+        "$"
+      ],
+      "result": "i",
+      "category": "Robot \u2014 high-level gait"
+    },
+    {
+      "name": "robot_get_mode",
+      "host_fn": "host_robot_get_mode",
+      "signature": "()i",
+      "params": [],
+      "result": "i",
+      "category": "Robot \u2014 high-level gait"
+    },
+    {
+      "name": "robot_set_body_pose",
+      "host_fn": "host_robot_set_body_pose",
+      "signature": "(fff)i",
+      "params": [
+        "f",
+        "f",
+        "f"
+      ],
+      "result": "i",
+      "category": "Robot \u2014 high-level gait"
+    },
+    {
+      "name": "robot_set_attitude_speed",
+      "host_fn": "host_robot_set_attitude_speed",
+      "signature": "(i)i",
+      "params": [
+        "i"
+      ],
+      "result": "i",
+      "category": "Robot \u2014 high-level gait"
+    },
+    {
+      "name": "robot_set_attitude_speed_xyz",
+      "host_fn": "host_robot_set_attitude_speed_xyz",
+      "signature": "(iii)i",
+      "params": [
+        "i",
+        "i",
+        "i"
+      ],
+      "result": "i",
+      "category": "Robot \u2014 high-level gait"
+    },
+    {
+      "name": "robot_set_config",
+      "host_fn": "host_robot_set_config",
+      "signature": "(iiiii)i",
+      "params": [
+        "i",
+        "i",
+        "i",
+        "i",
+        "i"
+      ],
+      "result": "i",
+      "category": "Robot \u2014 configuration"
+    },
+    {
+      "name": "robot_get_period",
+      "host_fn": "host_robot_get_period",
+      "signature": "()i",
+      "params": [],
+      "result": "i",
+      "category": "Robot \u2014 configuration"
+    },
+    {
+      "name": "robot_get_height",
+      "host_fn": "host_robot_get_height",
+      "signature": "()i",
+      "params": [],
+      "result": "i",
+      "category": "Robot \u2014 configuration"
+    },
+    {
+      "name": "robot_get_up_height",
+      "host_fn": "host_robot_get_up_height",
+      "signature": "()i",
+      "params": [],
+      "result": "i",
+      "category": "Robot \u2014 configuration"
+    },
+    {
+      "name": "robot_get_stride",
+      "host_fn": "host_robot_get_stride",
+      "signature": "()i",
+      "params": [],
+      "result": "i",
+      "category": "Robot \u2014 configuration"
+    },
+    {
+      "name": "robot_get_tilt",
+      "host_fn": "host_robot_get_tilt",
+      "signature": "()i",
+      "params": [],
+      "result": "i",
+      "category": "Robot \u2014 configuration"
+    },
+    {
+      "name": "robot_set_servo_angle",
+      "host_fn": "host_robot_set_servo_angle",
+      "signature": "(ii)i",
+      "params": [
+        "i",
+        "i"
+      ],
+      "result": "i",
+      "category": "Robot \u2014 low-level servo"
+    },
+    {
+      "name": "robot_flush",
+      "host_fn": "host_robot_flush",
+      "signature": "()i",
+      "params": [],
+      "result": "i",
+      "category": "Robot \u2014 low-level servo"
+    },
+    {
+      "name": "robot_set_servo_speed",
+      "host_fn": "host_robot_set_servo_speed",
+      "signature": "(ii)i",
+      "params": [
+        "i",
+        "i"
+      ],
+      "result": "i",
+      "category": "Robot \u2014 low-level servo"
+    },
+    {
+      "name": "robot_read_position",
+      "host_fn": "host_robot_read_position",
+      "signature": "(i)i",
+      "params": [
+        "i"
+      ],
+      "result": "i",
+      "category": "Robot \u2014 low-level servo"
+    },
+    {
+      "name": "robot_read_angle_cdeg",
+      "host_fn": "host_robot_read_angle_cdeg",
+      "signature": "(i)i",
+      "params": [
+        "i"
+      ],
+      "result": "i",
+      "category": "Robot \u2014 low-level servo"
+    },
+    {
+      "name": "robot_read_speed",
+      "host_fn": "host_robot_read_speed",
+      "signature": "(i)i",
+      "params": [
+        "i"
+      ],
+      "result": "i",
+      "category": "Robot \u2014 low-level servo"
+    },
+    {
+      "name": "robot_read_load",
+      "host_fn": "host_robot_read_load",
+      "signature": "(i)i",
+      "params": [
+        "i"
+      ],
+      "result": "i",
+      "category": "Robot \u2014 low-level servo"
+    },
+    {
+      "name": "robot_read_voltage",
+      "host_fn": "host_robot_read_voltage",
+      "signature": "(i)i",
+      "params": [
+        "i"
+      ],
+      "result": "i",
+      "category": "Robot \u2014 low-level servo"
+    },
+    {
+      "name": "robot_read_temperature",
+      "host_fn": "host_robot_read_temperature",
+      "signature": "(i)i",
+      "params": [
+        "i"
+      ],
+      "result": "i",
+      "category": "Robot \u2014 low-level servo"
+    },
+    {
+      "name": "robot_read_moving",
+      "host_fn": "host_robot_read_moving",
+      "signature": "(i)i",
+      "params": [
+        "i"
+      ],
+      "result": "i",
+      "category": "Robot \u2014 low-level servo"
+    },
+    {
+      "name": "robot_read_current",
+      "host_fn": "host_robot_read_current",
+      "signature": "(i)i",
+      "params": [
+        "i"
+      ],
+      "result": "i",
+      "category": "Robot \u2014 low-level servo"
+    },
+    {
+      "name": "robot_set_offset",
+      "host_fn": "host_robot_set_offset",
+      "signature": "(ii)i",
+      "params": [
+        "i",
+        "i"
+      ],
+      "result": "i",
+      "category": "Robot \u2014 calibration"
+    },
+    {
+      "name": "robot_get_offset",
+      "host_fn": "host_robot_get_offset",
+      "signature": "(i)i",
+      "params": [
+        "i"
+      ],
+      "result": "i",
+      "category": "Robot \u2014 calibration"
+    },
+    {
+      "name": "robot_ping_servo",
+      "host_fn": "host_robot_ping_servo",
+      "signature": "(i)i",
+      "params": [
+        "i"
+      ],
+      "result": "i",
+      "category": "Robot \u2014 calibration"
+    },
+    {
+      "name": "robot_delay_ms",
+      "host_fn": "host_robot_delay_ms",
+      "signature": "(i)i",
+      "params": [
+        "i"
+      ],
+      "result": "i",
+      "category": "Robot \u2014 utility"
+    },
+    {
+      "name": "robot_ik_fr",
+      "host_fn": "host_robot_ik_fr",
+      "signature": "(fff)i",
+      "params": [
+        "f",
+        "f",
+        "f"
+      ],
+      "result": "i",
+      "category": "Robot \u2014 IK (per-leg)"
+    },
+    {
+      "name": "robot_ik_fl",
+      "host_fn": "host_robot_ik_fl",
+      "signature": "(fff)i",
+      "params": [
+        "f",
+        "f",
+        "f"
+      ],
+      "result": "i",
+      "category": "Robot \u2014 IK (per-leg)"
+    },
+    {
+      "name": "robot_ik_rr",
+      "host_fn": "host_robot_ik_rr",
+      "signature": "(fff)i",
+      "params": [
+        "f",
+        "f",
+        "f"
+      ],
+      "result": "i",
+      "category": "Robot \u2014 IK (per-leg)"
+    },
+    {
+      "name": "robot_ik_rl",
+      "host_fn": "host_robot_ik_rl",
+      "signature": "(fff)i",
+      "params": [
+        "f",
+        "f",
+        "f"
+      ],
+      "result": "i",
+      "category": "Robot \u2014 IK (per-leg)"
+    },
+    {
+      "name": "robot_imu_read",
+      "host_fn": "host_robot_imu_read",
+      "signature": "(i)i",
+      "params": [
+        "i"
+      ],
+      "result": "i",
+      "category": "Robot \u2014 IMU"
+    },
+    {
+      "name": "robot_imu_print",
+      "host_fn": "host_robot_imu_print",
+      "signature": "()i",
+      "params": [],
+      "result": "i",
+      "category": "Robot \u2014 IMU"
+    },
+    {
+      "name": "servo_lock",
+      "host_fn": "host_servo_lock",
+      "signature": "()i",
+      "params": [],
+      "result": "i",
+      "category": "Robot \u2014 low-level servo (Unitree-style, SDK v2)"
+    },
+    {
+      "name": "servo_unlock",
+      "host_fn": "host_servo_unlock",
+      "signature": "()i",
+      "params": [],
+      "result": "i",
+      "category": "Robot \u2014 low-level servo (Unitree-style, SDK v2)"
+    },
+    {
+      "name": "servo_is_locked",
+      "host_fn": "host_servo_is_locked",
+      "signature": "()i",
+      "params": [],
+      "result": "i",
+      "category": "Robot \u2014 low-level servo (Unitree-style, SDK v2)"
+    },
+    {
+      "name": "servo_set_gain",
+      "host_fn": "host_servo_set_gain",
+      "signature": "(iif)i",
+      "params": [
+        "i",
+        "i",
+        "f"
+      ],
+      "result": "i",
+      "category": "Robot \u2014 low-level servo (Unitree-style, SDK v2)"
+    },
+    {
+      "name": "servo_get_gain",
+      "host_fn": "host_servo_get_gain",
+      "signature": "(iii)i",
+      "params": [
+        "i",
+        "i",
+        "i"
+      ],
+      "result": "i",
+      "category": "Robot \u2014 low-level servo (Unitree-style, SDK v2)"
+    },
+    {
+      "name": "servo_save_config",
+      "host_fn": "host_servo_save_config",
+      "signature": "(i)i",
+      "params": [
+        "i"
+      ],
+      "result": "i",
+      "category": "Robot \u2014 low-level servo (Unitree-style, SDK v2)"
+    },
+    {
+      "name": "servo_restore_config",
+      "host_fn": "host_servo_restore_config",
+      "signature": "(i)i",
+      "params": [
+        "i"
+      ],
+      "result": "i",
+      "category": "Robot \u2014 low-level servo (Unitree-style, SDK v2)"
+    },
+    {
+      "name": "servo_stage",
+      "host_fn": "host_servo_stage",
+      "signature": "(iffff)i",
+      "params": [
+        "i",
+        "f",
+        "f",
+        "f",
+        "f"
+      ],
+      "result": "i",
+      "category": "Robot \u2014 low-level servo (Unitree-style, SDK v2)"
+    },
+    {
+      "name": "servo_commit",
+      "host_fn": "host_servo_commit",
+      "signature": "()i",
+      "params": [],
+      "result": "i",
+      "category": "Robot \u2014 low-level servo (Unitree-style, SDK v2)"
+    },
+    {
+      "name": "servo_write_all",
+      "host_fn": "host_servo_write_all",
+      "signature": "(ii)i",
+      "params": [
+        "i",
+        "i"
+      ],
+      "result": "i",
+      "category": "Robot \u2014 low-level servo (Unitree-style, SDK v2)"
+    },
+    {
+      "name": "servo_read",
+      "host_fn": "host_servo_read",
+      "signature": "(ii)i",
+      "params": [
+        "i",
+        "i"
+      ],
+      "result": "i",
+      "category": "Robot \u2014 low-level servo (Unitree-style, SDK v2)"
+    },
+    {
+      "name": "servo_read_all",
+      "host_fn": "host_servo_read_all",
+      "signature": "(i)i",
+      "params": [
+        "i"
+      ],
+      "result": "i",
+      "category": "Robot \u2014 low-level servo (Unitree-style, SDK v2)"
+    },
+    {
+      "name": "servo_poll",
+      "host_fn": "host_servo_poll",
+      "signature": "()i",
+      "params": [],
+      "result": "i",
+      "category": "Robot \u2014 low-level servo (Unitree-style, SDK v2)"
+    },
+    {
+      "name": "servo_direct",
+      "host_fn": "host_servo_direct",
+      "signature": "(iiff)i",
+      "params": [
+        "i",
+        "i",
+        "f",
+        "f"
+      ],
+      "result": "i",
+      "category": "Robot \u2014 low-level servo (Unitree-style, SDK v2)"
+    },
+    {
+      "name": "servo_scan",
+      "host_fn": "host_servo_scan",
+      "signature": "()i",
+      "params": [],
+      "result": "i",
+      "category": "Robot \u2014 low-level servo (Unitree-style, SDK v2)"
+    }
+  ]
+}

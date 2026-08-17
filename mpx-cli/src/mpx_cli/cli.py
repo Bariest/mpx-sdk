@@ -17,8 +17,37 @@ from mpx_cli.commands.info import add_info_parser, cmd_info
 from mpx_cli.commands.versions import add_versions_parser, cmd_versions
 from mpx_cli.commands.publish import add_publish_parser, cmd_publish
 from mpx_cli.commands.robot import add_robot_parser, cmd_robot
+from mpx_cli.commands.deploy import add_deploy_parser, cmd_deploy
+from mpx_cli.commands.logs import add_logs_parser, cmd_logs
+from mpx_cli.commands.install import add_install_parser, cmd_install
 from mpx_cli.sdk.connection import DEFAULT_HOST, DEFAULT_PORT
 from mpx_cli.sdk.gateway import DEFAULT_GATEWAY_URL
+
+
+def robot_opts() -> argparse.ArgumentParser:
+    """Shared --ip/--port for every command that talks to the robot.
+
+    The defaults are ``argparse.SUPPRESS``, and that is load-bearing. A
+    subparser writes its defaults into a fresh namespace which argparse then
+    copies over the parent's, so a subparser option with any concrete default
+    silently overwrites a value given before the subcommand. SUPPRESS means an
+    absent flag is never set at all, so ``mpx-cli --ip X upload f.wasm`` and
+    ``mpx-cli upload f.wasm --ip X`` both survive, and when neither is given
+    the global default (which reads MPX_HOST) is what remains.
+    """
+    p = argparse.ArgumentParser(add_help=False)
+    p.add_argument(
+        "--ip", "-i",
+        default=argparse.SUPPRESS,
+        help=f"Robot IP address (default: {DEFAULT_HOST}, env: MPX_HOST)",
+    )
+    p.add_argument(
+        "--port", "-p",
+        type=int,
+        default=argparse.SUPPRESS,
+        help=f"Robot HTTP port (default: {DEFAULT_PORT}, env: MPX_PORT)",
+    )
+    return p
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -55,8 +84,11 @@ def build_parser() -> argparse.ArgumentParser:
     add_build_parser(sub)
     add_upload_parser(sub)
     add_run_parser(sub)
+    add_deploy_parser(sub)
     add_list_parser(sub)
     add_delete_parser(sub)
+    add_logs_parser(sub)
+    add_install_parser(sub)
 
     # Marketplace commands (require gateway)
     add_auth_parser(sub)
@@ -82,8 +114,14 @@ def main(argv: list[str] | None = None) -> None:
         "build": cmd_build,
         "upload": cmd_upload,
         "run": cmd_run,
+        "deploy": cmd_deploy,
         "list": cmd_list,
+        # `list` registers aliases=["ls"]; argparse dispatches the alias as the
+        # command name, so it needs its own entry or `mpx-cli ls` raises KeyError.
+        "ls": cmd_list,
         "delete": cmd_delete,
+        "logs": cmd_logs,
+        "install": cmd_install,
         "signup": cmd_signup,
         "login": cmd_login,
         "logout": cmd_logout,
@@ -95,7 +133,14 @@ def main(argv: list[str] | None = None) -> None:
     }
 
     try:
-        commands[args.command](args)
+        # Commands return False to signal a handled failure (a connection
+        # refused, a missing file) that has already been reported to the user.
+        # Without this they printed an error and still exited 0, so shell
+        # chains and CI treated a failed upload as success.
+        if commands[args.command](args) is False:
+            sys.exit(1)
+    except SystemExit:
+        raise
     except Exception as e:
         print(f"❌ {e}", file=sys.stderr)
         sys.exit(1)

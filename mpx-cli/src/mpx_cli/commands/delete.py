@@ -7,19 +7,14 @@ from mpx_cli.sdk.connection import RobotClient, RobotError
 
 
 def add_delete_parser(sub: argparse._SubParsersAction) -> None:
-    p = sub.add_parser("delete", help="Delete a skill from the robot")
+    from mpx_cli.cli import robot_opts
+
+    p = sub.add_parser(
+        "delete",
+        parents=[robot_opts()],
+        help="Delete a skill from the robot",
+    )
     p.add_argument("skill", help="Skill filename to delete (e.g. my_skill.wasm)")
-    p.add_argument(
-        "--ip", "-i",
-        default=None,
-        help="Robot IP address (default: 192.168.2.1)",
-    )
-    p.add_argument(
-        "--port", "-p",
-        type=int,
-        default=None,
-        help="Robot HTTP port (default: 80)",
-    )
     p.add_argument(
         "--yes", "-y",
         action="store_true",
@@ -34,10 +29,7 @@ def cmd_delete(args: argparse.Namespace) -> None:
             print("Cancelled.")
             return
 
-    client = RobotClient(
-        host=args.ip or "192.168.2.1",
-        port=args.port or 80,
-    )
+    client = RobotClient(host=args.ip, port=args.port)
 
     print(f"🗑️  Deleting '{args.skill}' from {client.host}:{client.port}...")
 

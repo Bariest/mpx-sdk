@@ -1,0 +1,7 @@
+{
+  "slug": "four_ways",
+  "title": "Four ways to move the robot",
+  "skill_type": "WASM",
+  "version": "1.0.0",
+  "readme": "Gaits, built-in IK, your own IK, and low-level servo control with Kp/Kd — in one annotated file."
+}
