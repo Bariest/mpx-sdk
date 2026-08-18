@@ -79,23 +79,49 @@ def _run(cmd: list[str], timeout: int = 10) -> tuple[int, str, str]:
         return -1, "", "timed out"
 
 
+def _can_target_wasm32(clang: str) -> bool:
+    """Can this clang actually emit wasm32?
+
+    Answering "is there a clang" is not the same as answering "can I build a
+    skill". An ESP-IDF or Xtensa toolchain puts a clang on PATH with no wasm32
+    target compiled in, and taking it produced "unable to create target: no
+    available targets are compatible with triple wasm32" from `build`, and a
+    confident "ok  WASI SDK" from `doctor` — the two messages together being
+    the exact opposite of what doctor is for. Compiling an empty translation
+    unit costs milliseconds and is the only answer that cannot be wrong.
+    """
+    rc, _, _ = _run([clang, "--target=wasm32", "-nostdlib", "-c", "-x", "c",
+                     "-o", os.devnull, "-"])
+    return rc == 0
+
+
 def _detect_wasi() -> Toolchain:
     """Detect WASI SDK (C/C++ → WASM)."""
     tc = Toolchain(name="WASI SDK", key="wasi", extensions=[".c", ".cc", ".cpp"])
+    # Explicit and well-known WASI locations first; a bare PATH clang last,
+    # because on a machine with an embedded toolchain installed it is the one
+    # least likely to be the right answer.
     candidates = [
         os.environ.get("WASI_CC"),
-        shutil.which("clang"),
         "/opt/wasi-sdk/bin/clang",
+        r"C:\wasi-sdk\bin\clang.exe",
+        shutil.which("clang"),
     ]
+    seen: list[str] = []
     for cand in candidates:
-        if cand and os.path.isfile(cand):
-            rc, out, _ = _run([cand, "--version"])
-            if rc == 0:
-                tc.bin = cand
-                # Extract "version X.Y.Z" from clang version string
-                m = re.search(r"version\s+([\d.]+)", out)
-                tc.version = m.group(1) if m else out.split("\n")[0]
-                break
+        if not cand or cand in seen:
+            continue
+        seen.append(cand)
+        if not (os.path.isfile(cand) or shutil.which(cand)):
+            continue
+        rc, out, _ = _run([cand, "--version"])
+        if rc != 0 or not _can_target_wasm32(cand):
+            continue
+        tc.bin = cand
+        # Extract "version X.Y.Z" from clang version string
+        m = re.search(r"version\s+([\d.]+)", out)
+        tc.version = m.group(1) if m else out.split("\n")[0]
+        break
     return tc
 
 

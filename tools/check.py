@@ -25,6 +25,7 @@ Nothing catches that except checking.
 from __future__ import annotations
 
 import json
+import os
 import pathlib
 import re
 import shutil
@@ -169,11 +170,50 @@ for d in sorted((ROOT / "examples").iterdir()):
 
 # ── 5. compile ──────────────────────────────────────────────────────────────
 section("compile every example for wasm32")
-clang = shutil.which("clang") or shutil.which("/opt/wasi-sdk/bin/clang")
+def _wasm_clang() -> "str | None":
+    """The first clang that can actually emit wasm32.
+
+    Finding *a* clang is not the same as finding one that can build a skill.
+    An ESP-IDF or Xtensa toolchain puts a clang on PATH with no wasm32 target
+    in it, and this check then failed all six examples with
+    "No available targets are compatible with triple wasm32" -- which looks
+    like the SDK is broken when it is the toolchain that is wrong. Probe
+    instead of assuming, and prefer the WASI SDK where it is installed.
+    """
+    seen = []
+    candidates = [
+        os.environ.get("WASI_CC"),
+        "/opt/wasi-sdk/bin/clang",
+        r"C:\wasi-sdk\bin\clang.exe",
+        shutil.which("clang"),
+    ]
+    for cand in candidates:
+        if not cand or cand in seen:
+            continue
+        seen.append(cand)
+        if not (os.path.isfile(cand) or shutil.which(cand)):
+            continue
+        probe = subprocess.run(
+            [cand, "--target=wasm32", "-nostdlib", "-c", "-x", "c",
+             "-o", os.devnull, "-"],
+            input="int main(void){return 0;}", capture_output=True, text=True)
+        if probe.returncode == 0:
+            return cand
+    return None
+
+
+clang = _wasm_clang()
 if not clang:
-    print("   SKIPPED — no clang on PATH. This is the check that catches a header\n"
-          "            change breaking every example; CI runs it, you are not.\n"
-          "            apt install clang lld   (needs a wasm32 target)")
+    found = shutil.which("clang")
+    print("   SKIPPED — no clang that can target wasm32. This is the check that\n"
+          "            catches a header change breaking every example; CI runs\n"
+          "            it, you are not.")
+    if found:
+        print(f"            (`{found}` exists but has no wasm32 target — that is\n"
+              "             usually an ESP-IDF or Xtensa clang.)")
+    print("            Install the WASI SDK, or set WASI_CC to a clang that can:\n"
+          "              https://github.com/WebAssembly/wasi-sdk/releases\n"
+          "            On Debian/Ubuntu: apt install clang lld")
 else:
     abi = json.loads((ROOT / "abi" / "host_functions.json").read_text(encoding="utf-8"))
     allowed = {s["name"] for s in abi["symbols"]}
