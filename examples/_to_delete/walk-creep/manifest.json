@@ -1,7 +1,0 @@
-{
-  "slug": "walk_creep",
-  "title": "Creep walk — a gait that stays upright",
-  "skill_type": "WASM",
-  "version": "1.0.0",
-  "readme": "A statically stable creep gait: one leg swings at a time, three always on the floor."
-}

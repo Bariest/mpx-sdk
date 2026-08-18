@@ -1,7 +1,0 @@
-{
-  "slug": "per_servo_gains",
-  "title": "Different gains on different joints",
-  "skill_type": "WASM",
-  "version": "1.0.0",
-  "readme": "Different gains on different joints. See README.md."
-}

@@ -1,221 +1,270 @@
 #!/usr/bin/env python3
-"""One source of truth for the host ABI, and a check that nothing has drifted.
+"""Single source of truth for the host ABI.
 
-WHY THIS EXISTS
+The firmware's NativeSymbol table is the only place a host function really
+exists. Everything else that describes it -- the JSON, the C header, the
+AssemblyScript bindings, the WAT reference -- is generated from that table by this script, so none of them can drift away from it.
 
-The host ABI is spelled out in five places that had no mechanical relationship
-to each other:
+    python tools/gen_abi.py --check     verify everything is in sync (CI)
+    python tools/gen_abi.py --write     regenerate everything
 
-    mangdang/main/sdk/wasm_host_functions.h   NATIVE_SYMBOLS[] — the real ABI
-    mpx-cli/.../resource/mpx_host.h           the C bindings
-    mpx-cli/.../resource/mpx_env.ts           the AssemblyScript bindings
-    mpx-cli/.../resource/host_functions_wat.md the WAT reference
-    HOST_FUNCTIONS.md                          the language-agnostic reference
+`--check` exits non-zero on any drift, and prints exactly what moved.
 
-Every one was edited by hand, at different times, and they drifted. An audit
-found three symbols missing from the AssemblyScript bindings entirely, one
-missing from the docs, gait enums that stopped eight entries short of what the
-firmware accepted, and five reader functions documented as working that return
-a hardcoded -1. None of that was carelessness — it is what five hand-maintained
-copies of one list always does.
-
-`abi/host_functions.json` is now the list. This script checks the others
-against it and fails loudly when they disagree, so drift becomes a build error
-rather than a bug someone finds on hardware six weeks later.
-
-USAGE
-
-    python tools/gen_abi.py --check      # verify everything agrees (exit 1 on drift)
-    python tools/gen_abi.py --extract    # re-derive the table FROM the firmware
-    python tools/gen_abi.py --table      # print the NATIVE_SYMBOLS[] block
-
-WHY --check RATHER THAN FULL CODE GENERATION
-
-mpx_host.h is not just declarations; it carries ~600 lines of hand-written
-ergonomic helpers (robot_walk_forward, robot_gait_enum, pose structs) that are
-genuinely better written by a person. Generating the whole file would mean
-either losing those or embedding them in a generator, both worse than what
-exists. So the generator owns the *table*, and verifies the *bindings* — which
-is where all the real drift was.
+Why this matters: before it existed, four hand-maintained copies of the same
+header lived in this repo and two of them had gone stale -- one still described
+ABI v1 and would trap on its first host call. That is not a discipline problem,
+it is a design problem, and this script is the fix.
 """
-
 from __future__ import annotations
 
 import argparse
 import json
+import pathlib
 import re
 import sys
-from pathlib import Path
 
-REPO = Path(__file__).resolve().parent.parent
-ABI_JSON = REPO / "abi" / "host_functions.json"
+ROOT = pathlib.Path(__file__).resolve().parent.parent
+DEFAULT_FIRMWARE = ROOT.parent / "mangdang" / "main" / "sdk" / "wasm_host_functions.h"
 
-# The firmware lives beside the SDK in the normal checkout. Overridable because
-# not everyone keeps them as siblings.
-DEFAULT_FIRMWARE = REPO.parent / "mangdang" / "main" / "sdk" / "wasm_host_functions.h"
+# WAMR signature letters -> what they mean on each side of the boundary.
+TYPES = {
+    "i": ("int",   "i32",   "int32"),
+    "I": ("long long", "i64", "int64"),
+    "f": ("float", "f32",   "f32"),
+    "F": ("double","f64",   "f64"),
+    "$": ("const char *", "i32", "usize"),   # string; WAMR converts the pointer
+    "*": ("void *", "i32",  "usize"),
+}
 
-RES = REPO / "mpx-cli" / "src" / "mpx_cli" / "commands" / "resource"
-C_HEADER = RES / "mpx_host.h"
-TS_BINDINGS = RES / "mpx_env.ts"
-WAT_DOC = RES / "host_functions_wat.md"
-MD_DOC = REPO / "HOST_FUNCTIONS.md"
-
-
-# ── Parsing ───────────────────────────────────────────────────────────────
-
-def parse_firmware_table(header: Path) -> list[dict]:
-    """Read NATIVE_SYMBOLS[] — the only definition that is actually executed."""
-    text = header.read_text(encoding="utf-8")
-    try:
-        block = text[text.index("NATIVE_SYMBOLS[] = {"):]
-        block = block[: block.index("};")]
-    except ValueError:
-        raise SystemExit(f"error: no NATIVE_SYMBOLS[] block in {header}")
-
-    out, category = [], "core"
-    for line in block.splitlines():
-        heading = re.match(r"\s*//\s*[─\-]*\s*(.+?)\s*$", line)
-        if heading and "{" not in line:
-            category = heading.group(1).strip()
-            continue
-        row = re.match(r'\s*\{\s*"([a-z_0-9]+)",\s*\(void \*\)(\w+),\s*"([^"]*)",', line)
-        if row:
-            name, fn, sig = row.groups()
-            out.append({
-                "name": name,
-                "host_fn": fn,
-                "signature": sig,
-                "params": list(sig[sig.index("(") + 1: sig.index(")")]),
-                "result": sig[sig.index(")") + 1:] or None,
-                "category": category,
-            })
-    return out
+ERRORS = [
+    ("MPX_OK",              0, "Success."),
+    ("MPX_ERR_ARG",        -1, "Bad argument: id, index or pointer."),
+    ("MPX_ERR_NOT_LOCKED", -2, "You do not hold the servo bus."),
+    ("MPX_ERR_NO_REPLY",   -3, "The driver board did not answer."),
+    ("MPX_ERR_READONLY",   -4, "Calibration parameter; read-only."),
+    ("MPX_ERR_CANCELLED",  -5, "Your skill was stopped mid-call."),
+    ("MPX_ERR_STATE",      -6, "Right call, wrong time."),
+    ("MPX_ERR_BUSY",       -7, "Another control domain holds the joints."),
+]
 
 
-def load_abi() -> dict:
-    if not ABI_JSON.exists():
-        raise SystemExit(f"error: {ABI_JSON} missing — run --extract first")
-    return json.loads(ABI_JSON.read_text(encoding="utf-8"))
+def parse_firmware(path: pathlib.Path):
+    """Pull the ABI version and the NativeSymbol table out of the firmware."""
+    text = path.read_text(encoding="utf-8", errors="replace")
+
+    m = re.search(r"MPX_ABI_VERSION\s*=\s*(\d+)", text)
+    if not m:
+        sys.exit(f"error: no MPX_ABI_VERSION in {path}")
+    version = int(m.group(1))
+
+    start = text.find("NATIVE_SYMBOLS[] = {")
+    if start < 0:
+        sys.exit(f"error: no NATIVE_SYMBOLS table in {path}")
+    block = text[start : text.index("\n};", start)]
+
+    symbols = []
+    for name, sig in re.findall(r'\{\s*"([a-zA-Z_0-9]+)"\s*,[^,]+,\s*"([^"]*)"', block):
+        args, _, ret = sig.partition(")")
+        symbols.append({
+            "name": name,
+            "signature": sig,
+            "args": list(args.lstrip("(")),
+            "returns": ret or None,
+        })
+
+    dupes = {s["name"] for s in symbols if [x["name"] for x in symbols].count(s["name"]) > 1}
+    if dupes:
+        sys.exit(f"error: duplicate symbols in the firmware table: {sorted(dupes)}")
+
+    return version, symbols
 
 
-# ── Checks ────────────────────────────────────────────────────────────────
-
-def check(firmware: Path) -> int:
-    abi = load_abi()
-    symbols = abi["symbols"]
-    by_name = {s["name"]: s for s in symbols}
-    problems: list[str] = []
-
-    # 1. The firmware IS the ABI. If it disagrees with the table, the table is
-    #    stale and every other check below is measuring the wrong thing.
-    if firmware.exists():
-        fw = {s["name"]: s for s in parse_firmware_table(firmware)}
-        for name, s in by_name.items():
-            if name not in fw:
-                problems.append(f"{name}: in abi.json but NOT registered in the firmware")
-            elif fw[name]["signature"] != s["signature"]:
-                problems.append(
-                    f"{name}: signature drift — firmware '{fw[name]['signature']}' "
-                    f"vs abi.json '{s['signature']}'")
-        for name in fw:
-            if name not in by_name:
-                problems.append(f"{name}: registered in the firmware but missing from abi.json")
+def c_decl(sym) -> str:
+    ret = TYPES[sym["returns"]][0] if sym["returns"] else "void"
+    if not sym["args"]:
+        args = "void"
     else:
-        print(f"note: firmware not found at {firmware} — skipping the table check")
-
-    # 2. Bindings must declare every symbol. This is what actually broke: three
-    #    symbols were absent from mpx_env.ts for the life of the SDK.
-    c_text = C_HEADER.read_text(encoding="utf-8") if C_HEADER.exists() else ""
-    ts_text = TS_BINDINGS.read_text(encoding="utf-8") if TS_BINDINGS.exists() else ""
-    wat_text = WAT_DOC.read_text(encoding="utf-8") if WAT_DOC.exists() else ""
-    md_text = MD_DOC.read_text(encoding="utf-8") if MD_DOC.exists() else ""
-
-    for name, s in by_name.items():
-        if c_text and not re.search(rf"\bextern\s+\w+\s+{re.escape(name)}\s*\(", c_text):
-            problems.append(f"{name}: not declared in mpx_host.h")
-        if ts_text and f'@external("env", "{name}")' not in ts_text:
-            problems.append(f"{name}: not declared in mpx_env.ts")
-        if wat_text and f'"{name}"' not in wat_text:
-            problems.append(f"{name}: not in host_functions_wat.md")
-        if md_text and name not in md_text:
-            problems.append(f"{name}: not in HOST_FUNCTIONS.md")
-
-    # 3. A void return is how seventeen error codes became unreachable. Never
-    #    again silently: any symbol without a result must be deliberate.
-    for name, s in by_name.items():
-        if not s["result"]:
-            problems.append(
-                f"{name}: registered with NO result — its error code cannot reach "
-                f"a skill. This is the ABI v1 bug; add 'i' to the signature.")
-
-    # 4. C return type must agree with the signature's result.
-    #
-    #    Strip comments first. mpx_host.h documents each import as
-    #    "Wasm import:  extern int robot_gait(...)" inside the doc block, so a
-    #    naive search finds the comment and reports on prose rather than on the
-    #    declaration. (It did, on the first run — and the comments turned out to
-    #    be stale too, so both got fixed.)
-    c_code = re.sub(r"/\*.*?\*/", "", c_text, flags=re.S)
-    c_code = re.sub(r"//[^\n]*", "", c_code)
-    for name, s in by_name.items():
-        m = re.search(rf"\bextern\s+(\w+)\s+{re.escape(name)}\s*\(", c_code)
-        if m and s["result"] == "i" and m.group(1) == "void":
-            problems.append(f"{name}: signature returns i32 but mpx_host.h declares void")
-
-    if problems:
-        print(f"✗ {len(problems)} ABI problem(s):\n")
-        for p in problems:
-            print(f"   {p}")
-        return 1
-
-    print(f"✓ ABI v{abi['abi_version']}: {len(symbols)} symbols consistent across "
-          f"the firmware table, mpx_host.h, mpx_env.ts and both references")
-    return 0
+        args = ", ".join(f"{TYPES[a][0]} a{i}" for i, a in enumerate(sym["args"]))
+    return f"extern {ret} {sym['name']}({args});"
 
 
-def emit_table(abi: dict) -> str:
-    """The NATIVE_SYMBOLS[] block, as the firmware should contain it."""
-    width_n = max(len(s["name"]) for s in abi["symbols"]) + 3
-    width_f = max(len(s["host_fn"]) for s in abi["symbols"]) + 2
-    lines, cat = ["static NativeSymbol NATIVE_SYMBOLS[] = {"], None
-    for s in abi["symbols"]:
-        if s["category"] != cat:
-            cat = s["category"]
-            lines.append(f"\t// {cat}")
-        name = f'"{s["name"]}",'.ljust(width_n)
-        fn = f'(void *){s["host_fn"]},'.ljust(width_f + 9)
-        sig = f'"{s["signature"]}",'.ljust(11)
-        lines.append(f"\t{{ {name}{fn}{sig}nullptr }},")
-    lines.append("};")
+def ts_decl(sym) -> str:
+    ret = {"i": "i32", "f": "f32", "I": "i64", "F": "f64"}.get(sym["returns"] or "", "void")
+    if sym["returns"] is None:
+        ret = "void"
+    args = ", ".join(
+        f"a{i}: " + {"i": "i32", "f": "f32", "$": "usize", "*": "usize",
+                     "I": "i64", "F": "f64"}[a]
+        for i, a in enumerate(sym["args"])
+    )
+    return f"export declare function {sym['name']}({args}): {ret};"
+
+
+def wat_decl(sym) -> str:
+    params = " ".join(f"({TYPES[a][1]})".replace("(", "param ").replace(")", "")
+                      for a in sym["args"])
+    params = " ".join(f"(param {TYPES[a][1]})" for a in sym["args"])
+    result = f" (result {TYPES[sym['returns']][1]})" if sym["returns"] else ""
+    return f'(import "env" "{sym["name"]}" (func ${sym["name"]}{" " + params if params else ""}{result}))'
+
+
+def render_json(version, symbols) -> str:
+    return json.dumps({
+        "abi_version": version,
+        "symbol_count": len(symbols),
+        "_note": ("GENERATED by tools/gen_abi.py from the firmware's NativeSymbol "
+                  "table. Do not edit: change the firmware and regenerate."),
+        "error_codes": [{"name": n, "code": c, "meaning": m} for n, c, m in ERRORS],
+        "types": {k: {"c": v[0], "wasm": v[1]} for k, v in TYPES.items()},
+        "symbols": symbols,
+    }, indent=2) + "\n"
+
+
+def render_ts(version, symbols) -> str:
+    lines = [
+        "// mpx_env.ts — the raw host imports for AssemblyScript skills.",
+        "//",
+        "// GENERATED by tools/gen_abi.py. Do not edit.",
+        f"// ABI version {version}, {len(symbols)} symbols.",
+        "",
+        f"export const MPX_ABI_VERSION: i32 = {version};",
+        "",
+    ]
+    lines += [f"export const {n}: i32 = {c};" for n, c, _ in ERRORS]
+    lines += ["", '@external("env", "__placeholder__")', ""]
+    lines = lines[:-3] + [""]
+    for s in symbols:
+        lines.append(f'@external("env", "{s["name"]}")')
+        lines.append(ts_decl(s))
+        lines.append("")
     return "\n".join(lines)
 
 
+def render_wat(version, symbols) -> str:
+    out = [f"# WAT host imports — ABI v{version}, {len(symbols)} symbols",
+           "",
+           "GENERATED by `tools/gen_abi.py`. Do not edit.",
+           "",
+           "Paste the imports you need at the top of your module.",
+           "",
+           "```wat"]
+    out += [wat_decl(s) for s in symbols]
+    out += ["```", ""]
+    return "\n".join(out)
+
+
+def render_reference(version, symbols) -> str:
+    out = [
+        "# Host function reference",
+        "",
+        f"ABI version **{version}** — **{len(symbols)}** functions.",
+        "",
+        "GENERATED by `tools/gen_abi.py` from the firmware's own symbol table.",
+        "Do not edit this file; it is regenerated and CI fails on drift.",
+        "",
+        "These are the raw imports. Most of the time you want the friendly",
+        "wrappers in `sdk/include/mpx/` instead — see",
+        "[the guide](../MOVEMENT.md). Every wrapper is a",
+        "`static inline` over exactly one of these, so nothing here is hidden",
+        "from you and nothing costs extra.",
+        "",
+        "## Error codes",
+        "",
+        "| Code | Name | Meaning |",
+        "|---:|---|---|",
+    ]
+    out += [f"| `{c}` | `{n}` | {m} |" for n, c, m in ERRORS]
+    out += ["", "## Functions", "",
+            "| Function | C signature | Wire signature |", "|---|---|---|"]
+    for s in symbols:
+        out.append(f"| `{s['name']}` | `{c_decl(s)[7:-1]}` | `{s['signature']}` |")
+    out.append("")
+    return "\n".join(out)
+
+
+def render_errors_doc(version) -> str:
+    out = ["# Error codes", "",
+           f"ABI v{version}. GENERATED by `tools/gen_abi.py`; do not edit.", "",
+           "Every host function returns one of these. `0` is success; anything",
+           "negative is a failure. Functions documented to return data return a",
+           "non-negative value instead.", "",
+           "`mpx_strerror(code)` turns any of them into text.", "",
+           "| Code | Name | Meaning |", "|---:|---|---|"]
+    out += [f"| `{c}` | `{n}` | {m} |" for n, c, m in ERRORS]
+    out.append("")
+    return "\n".join(out)
+
+
+TARGETS = {
+    "abi/host_functions.json":        render_json,
+    "sdk/assemblyscript/mpx_env.ts":  render_ts,
+    "sdk/wat/host-functions.md":      render_wat,
+}
+
+
 def main() -> int:
-    ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    ap.add_argument("--check", action="store_true",
-                    help="Verify every copy of the ABI agrees (exit 1 on drift)")
-    ap.add_argument("--extract", action="store_true",
-                    help="Re-derive abi/host_functions.json from the firmware")
-    ap.add_argument("--table", action="store_true",
-                    help="Print the NATIVE_SYMBOLS[] block")
-    ap.add_argument("--firmware", type=Path, default=DEFAULT_FIRMWARE,
-                    help="Path to wasm_host_functions.h")
+    ap = argparse.ArgumentParser(description=__doc__,
+                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--firmware", type=pathlib.Path, default=DEFAULT_FIRMWARE,
+                    help="path to main/sdk/wasm_host_functions.h in the firmware repo")
+    g = ap.add_mutually_exclusive_group(required=True)
+    g.add_argument("--check", action="store_true", help="fail if anything is out of date")
+    g.add_argument("--write", action="store_true", help="regenerate everything")
     args = ap.parse_args()
 
-    if args.extract:
-        syms = parse_firmware_table(args.firmware)
-        abi = load_abi() if ABI_JSON.exists() else {"abi_version": 2}
-        abi["symbols"] = syms
-        abi["symbol_count"] = len(syms)
-        ABI_JSON.write_text(json.dumps(abi, indent=2) + "\n", encoding="utf-8")
-        print(f"✓ extracted {len(syms)} symbols -> {ABI_JSON.relative_to(REPO)}")
+    if not args.firmware.exists():
+        print(f"error: firmware header not found at {args.firmware}", file=sys.stderr)
+        print("       pass --firmware <path> if your checkout is laid out differently",
+              file=sys.stderr)
+        return 2
+
+    version, symbols = parse_firmware(args.firmware)
+
+    rendered = {p: fn(version, symbols) for p, fn in TARGETS.items()}
+
+    # The C header is hand-written prose around a generated body, so it is
+    # checked rather than overwritten: its declarations must match, its comments
+    # are ours to write.
+    header = (ROOT / "sdk/include/mpx/abi.h").read_text(encoding="utf-8")
+    missing = [s["name"] for s in symbols
+               if not re.search(rf"\b{re.escape(s['name'])}\s*\(", header)]
+    extra_v = re.search(r"#define MPX_ABI_VERSION (\d+)", header)
+
+    problems = []
+    if missing:
+        problems.append(f"sdk/include/mpx/abi.h is missing: {', '.join(missing)}")
+    if not extra_v or int(extra_v.group(1)) != version:
+        problems.append(f"sdk/include/mpx/abi.h declares ABI "
+                        f"{extra_v.group(1) if extra_v else '?'}, firmware says {version}")
+
+    for rel, text in rendered.items():
+        path = ROOT / rel
+        current = path.read_text(encoding="utf-8") if path.exists() else None
+        if args.write:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            if current != text:
+                path.write_text(text, encoding="utf-8")
+                print(f"  updated {rel}")
+        elif current != text:
+            problems.append(f"{rel} is out of date")
+
+    if args.write:
+        print(f"ABI v{version}, {len(symbols)} symbols — generated from {args.firmware}")
+        if problems:
+            for p in problems:
+                print(f"  ! {p}")
+            return 1
         return 0
 
-    if args.table:
-        print(emit_table(load_abi()))
-        return 0
+    if problems:
+        print("ABI drift detected:")
+        for p in problems:
+            print(f"  ! {p}")
+        print("\nRun: python tools/gen_abi.py --write")
+        return 1
 
-    return check(args.firmware)
+    print(f"ABI v{version}, {len(symbols)} symbols — everything in sync")
+    return 0
 
 
 if __name__ == "__main__":

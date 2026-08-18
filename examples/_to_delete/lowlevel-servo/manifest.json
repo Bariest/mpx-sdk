@@ -1,7 +1,0 @@
-{
-  "slug": "lowlevel_servo",
-  "title": "Low-level servo control (Unitree-style)",
-  "skill_type": "WASM",
-  "version": "1.0.0",
-  "readme": "Low-level servo control (Unitree-style). See README.md."
-}

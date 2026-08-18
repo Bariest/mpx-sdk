@@ -1,7 +1,0 @@
-{
-  "slug": "hello_world",
-  "title": "Hello World — your first MPX skill",
-  "skill_type": "WASM",
-  "version": "1.0.0",
-  "readme": "The smallest skill that does something visible: says hello, takes four steps, sits back down."
-}

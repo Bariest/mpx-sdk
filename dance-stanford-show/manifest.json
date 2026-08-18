@@ -1,7 +1,0 @@
-{
-  "slug": "dance-stanford-show",
-  "title": "Dance: Stanford Show",
-  "skill_type": "WASM",
-  "version": "1.0.0",
-  "readme": "A choreographed dance routine for the MangDang MPX-Dog quadruped robot. Runs the Stanford show sequence."
-}
