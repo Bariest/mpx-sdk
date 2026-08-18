@@ -324,13 +324,23 @@ board runs a **current** loop, deciding how the motor produces the torque the
 position loop asked for. That is what you reach for when a joint arrives in the
 right place but arrives *badly*:
 
-| Gain | Stock | Studio step | From a skill |
-|---|---|---|---|
-| Kp position | `65` | 0.01 | `mpx_gain_set(j, MPX_PARAM_KP_POSITION, v)` |
-| Kd position | `800` | 0.01 | `mpx_gain_set(j, MPX_PARAM_KD_POSITION, v)` |
-| Kp current | `0.0006` | 0.0001 | `mpx_current_kp(j, v)` |
-| Kff current | `0.00022` | 0.00001 | `mpx_current_kff(j, v)` |
-| Max PWM duty | — | 0.01 | `mpx_max_effort(j, 0..1)` |
+| Gain | Stock | Studio step | One joint | All twelve |
+|---|---|---|---|---|
+| Kp position | `65` | 0.01 | `mpx_gain_set(j, MPX_PARAM_KP_POSITION, v)` | `mpx_gains_all(kp, kd)` |
+| Kd position | `800` | 0.01 | `mpx_gain_set(j, MPX_PARAM_KD_POSITION, v)` | ↑ same call |
+| Kp current | `0.0006` | 0.0001 | `mpx_current_kp(j, v)` | `mpx_current_all(kp, kff)` |
+| Kff current | `0.00022` | 0.00001 | `mpx_current_kff(j, v)` | ↑ same call |
+| Max PWM duty | — | 0.01 | `mpx_max_effort(j, 0..1)` | `mpx_max_effort_all(0..1)` |
+
+**Two bulk calls, one per loop — not one call taking four numbers.** That is
+deliberate. A single `mpx_gains_all(65, 800, 0.0006, 0.00022)` puts values five
+orders of magnitude apart side by side as unlabelled arguments, where swapping
+two is both catastrophic and invisible; this SDK has already shipped that
+mistake once. Split by loop, every argument list holds numbers of the same size.
+
+Max PWM duty is in neither, because it is a torque **ceiling** rather than a
+tuned gain — if it rode along with the gains, every stiffness change would
+quietly reset a safety limit you set on purpose.
 
 **Do not carry a number across the two loops.** They are in different units and
 about five orders of magnitude apart: `65` is a sane position gain and a
@@ -424,8 +434,10 @@ for (int i = 0; i < 90; ++i) {
 
 **Working examples:** [01-gaits](../examples/01-gaits) ·
 [02-feet](../examples/02-feet) · [03-joints](../examples/03-joints) ·
-[04-motors](../examples/04-motors) · [05-sensing](../examples/05-sensing) ·
-[06-together](../examples/06-together)
+[04-motors](../examples/04-motors) · [05-together](../examples/06-together)
+[02-gaits](../examples/01-gaits) · [05-timeline](../examples/06-together) ·
+[06-own-ik](../examples/03-joints) · [09-live](../examples/06-together) ·
+[10-behaviour](../examples/06-together)
 
 ---
 

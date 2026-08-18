@@ -101,7 +101,27 @@ static inline int mpx_gain_get(mpx_joint_t j, mpx_param_t p, float *out)
     return servo_get_gain((int)j, (int)p, out);
 }
 
-/** Same gains on every joint. Returns the first error, or MPX_OK. */
+/** The same POSITION-loop gains on every joint. First error, or MPX_OK.
+ *
+ *  Sets Kp and Kd only. Its partner is mpx_current_all() one section down;
+ *  together they cover all four tuned gains, and mpx_gains_stock() puts all
+ *  four back.
+ *
+ *  WHY THE TWO LOOPS ARE NOT ONE CALL. It is tempting to make this take all
+ *  five numbers and be done. Then a call site reads
+ *
+ *      mpx_gains_all(65.0f, 800.0f, 0.0006f, 0.00022f, 1.0f);
+ *
+ *  — five unlabelled floats spanning five orders of magnitude, where swapping
+ *  two of them is both catastrophic and invisible. That is not hypothetical:
+ *  this SDK shipped mpx_current_kp(..., 40.0f), a position-loop number in a
+ *  current-loop slot, roughly 66,000x too high. Splitting by loop keeps every
+ *  argument list to numbers of the same magnitude, so a mistake is a mistake
+ *  between neighbours rather than between 65 and 0.0006.
+ *
+ *  Max PWM duty is deliberately in neither: it is a torque CEILING, not a
+ *  tuned gain. Bundling it here would mean every stiffness change silently
+ *  reset a safety limit someone set on purpose. It has mpx_max_effort_all(). */
 static inline int mpx_gains_all(float kp, float kd)
 {
     for (int id = 1; id <= 12; ++id) {
@@ -158,6 +178,27 @@ static inline int mpx_current_kff(mpx_joint_t j, float v)
     return mpx_gain_set(j, MPX_PARAM_KFF_CURRENT, v);
 }
 
+/** The same CURRENT-loop gains on every joint — the partner to
+ *  mpx_gains_all(). First error, or MPX_OK.
+ *
+ *  Between the two you can set all four tuned gains on all twelve joints, and
+ *  neither call ever contains a number from the other loop. Stock is
+ *
+ *      mpx_current_all(MPX_KP_CURRENT_STOCK, MPX_KFF_CURRENT_STOCK);
+ *
+ *  and scaling from those constants is safer than typing absolute values,
+ *  because nothing about 0.0009 looks wrong next to 65. */
+static inline int mpx_current_all(float kp_current, float kff_current)
+{
+    for (int id = 1; id <= 12; ++id) {
+        int rc = servo_set_gain(id, (int)MPX_PARAM_KP_CURRENT, kp_current);
+        if (rc != MPX_OK) return rc;
+        rc = servo_set_gain(id, (int)MPX_PARAM_KFF_CURRENT, kff_current);
+        if (rc != MPX_OK) return rc;
+    }
+    return MPX_OK;
+}
+
 /** Ceiling on drive effort, 0..1 — your torque limit.
  *
  *  Lower it and the joint becomes physically unable to push hard, which is
@@ -180,16 +221,14 @@ static inline int mpx_max_effort_all(float duty_0_to_1)
     return worst;
 }
 
-/* Declared above, next to mpx_gains_all(), where you go looking for it. */
+/* Declared above, next to mpx_gains_all(), where you go looking for it.
+ * Deliberately both loops: restoring only half is worse than restoring none,
+ * because it looks like you cleaned up. */
 static inline int mpx_gains_stock(void)
 {
     int worst = mpx_gains_all(MPX_KP_STOCK, MPX_KD_STOCK);
-    for (int id = 1; id <= 12; ++id) {
-        int rc = mpx_current_kp ((mpx_joint_t)id, MPX_KP_CURRENT_STOCK);
-        if (rc != MPX_OK) worst = rc;
-        rc = mpx_current_kff((mpx_joint_t)id, MPX_KFF_CURRENT_STOCK);
-        if (rc != MPX_OK) worst = rc;
-    }
+    int rc = mpx_current_all(MPX_KP_CURRENT_STOCK, MPX_KFF_CURRENT_STOCK);
+    if (rc != MPX_OK) worst = rc;
     return worst;
 }
 

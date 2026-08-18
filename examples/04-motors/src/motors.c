@@ -31,7 +31,16 @@ MPX_EXPORT void on_start(void)
 
     /* ── A. Stiffness ────────────────────────────────────────────────────
      * Kp is how hard the motor pulls towards its target; Kd damps the
-     * approach. Stock is Kp 65, Kd 800. */
+     * approach. Stock is Kp 65, Kd 800.
+     *
+     * There are FOUR tuned gains, in two loops, set by two paired calls:
+     *
+     *   mpx_gains_all  (kp, kd)            the POSITION loop — this one
+     *   mpx_current_all(kp_cur, kff_cur)   the CURRENT loop  — section A2
+     *
+     * They are separate on purpose: one call taking all four would put 65 and
+     * 0.0006 side by side as unlabelled arguments, and swapping them wrecks a
+     * joint without any visible sign. mpx_gains_stock() puts all four back. */
     mpx_gains_all(65.0f, 800.0f);
     mpx_gain_set(MPX_FR_KNEE, MPX_PARAM_KP_POSITION, 95.0f);   /* one stiffer */
 
@@ -53,7 +62,14 @@ MPX_EXPORT void on_start(void)
      * constants rather than typing an absolute value. */
     mpx_current_kp (MPX_FR_KNEE, MPX_KP_CURRENT_STOCK  * 1.5f);  /* 0.00090 */
     mpx_current_kff(MPX_FR_KNEE, MPX_KFF_CURRENT_STOCK * 1.2f);  /* 0.00026 */
-    mpx_max_effort (MPX_FR_KNEE, 0.6f);    /* 0..1 — a physical torque ceiling */
+
+    /* ...and the same two on all twelve, when you want the whole robot: */
+    mpx_current_all(MPX_KP_CURRENT_STOCK, MPX_KFF_CURRENT_STOCK);
+
+    /* Not a gain — a torque CEILING, which is why it is neither in
+     * mpx_gains_all nor in mpx_current_all. Bundling it would mean every
+     * stiffness change quietly reset a safety limit you set on purpose. */
+    mpx_max_effort (MPX_FR_KNEE, 0.6f);    /* 0..1 */
 
     /* Calibration, not gains. These decide what every angle MEANS, and
      * mpx_gain_save() would burn a mistake into the driver board's flash
