@@ -3,7 +3,7 @@
 **Real movements mix layers. The skill is knowing when to come back up.**
 
 ```bash
-mpx-cli deploy examples/05-together
+mpx-cli deploy examples/06-together
 mpx-cli movements          # "greet" is now in the list
 mpx-cli trace              # watch it level itself
 mpx-cli stop               # the only way a behaviour ends

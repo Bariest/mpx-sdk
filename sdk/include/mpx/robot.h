@@ -6,7 +6,7 @@
  *
  * Go down to mpx/leg.h when you need to place a specific foot, and to
  * mpx/bus.h when you need to own a motor's control loop. See
- * docs/guide/how-motion-works.md for which layer owns what.
+ * docs/MOVEMENT.md for which layer owns what.
  */
 #ifndef MPX_ROBOT_H
 #define MPX_ROBOT_H

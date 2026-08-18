@@ -424,10 +424,8 @@ for (int i = 0; i < 90; ++i) {
 
 **Working examples:** [01-gaits](../examples/01-gaits) ·
 [02-feet](../examples/02-feet) · [03-joints](../examples/03-joints) ·
-[04-motors](../examples/04-motors) · [05-together](../examples/06-together)
-[02-gaits](../examples/01-gaits) · [05-timeline](../examples/06-together) ·
-[06-own-ik](../examples/03-joints) · [09-live](../examples/06-together) ·
-[10-behaviour](../examples/06-together)
+[04-motors](../examples/04-motors) · [05-sensing](../examples/05-sensing) ·
+[06-together](../examples/06-together)
 
 ---
 

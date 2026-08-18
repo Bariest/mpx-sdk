@@ -44,7 +44,7 @@ sandbox and end up inside JSON.
 
 ### Also
 
-- `examples/09-live` — all three together: stay level while the firmware walks.
+- `examples/06-together` — all three together: stay level while the firmware walks.
 - `docs/guide/live-control.md`.
 - `mpx-cli trace`.
 - `tools/check.py` and `mpx-cli init` now read the ABI version instead of

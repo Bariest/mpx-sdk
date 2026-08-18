@@ -22,7 +22,7 @@
  *   on             the firmware starts it when the robot is picked up
  *   params         tunable at run time, no rebuild
  *
- *     mpx-cli deploy examples/05-together
+ *     mpx-cli deploy examples/06-together
  *     mpx-cli movements            # "greet" is now in the list
  *     mpx-cli trace                # watch it level itself
  *     mpx-cli stop                 # the only way a behaviour ends

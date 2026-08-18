@@ -120,4 +120,4 @@ def cmd_trace(args: argparse.Namespace) -> None:
             print(f"\n{total} sample(s), {len(series)} signal(s).")
         else:
             print("\nNo samples. The robot only has them while a skill that calls "
-                  "mpx_trace() is running —\ntry: mpx-cli deploy examples/09-live")
+                  "mpx_trace() is running —\ntry: mpx-cli deploy examples/06-together")

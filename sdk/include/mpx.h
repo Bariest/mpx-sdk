@@ -25,8 +25,8 @@
  *   mpx/bus.h     gains, torque, the motor's control loop        one motor
  *   mpx/abi.h     the raw host imports                           rarely
  *
- * docs/guide/how-motion-works.md explains how they fit together and, more
- * importantly, what happens when two of them want the same joint.
+ * docs/MOVEMENT.md explains how they fit together and, more importantly,
+ * what happens when two of them want the same joint.
  */
 #ifndef MPX_H
 #define MPX_H
