@@ -78,10 +78,68 @@ class GatewayClient:
                 if raw:
                     return json.loads(raw)
                 return {}
+        except HTTPError as e:
+            # MUST come before URLError: HTTPError subclasses it. Without this
+            # branch an HTTP 422 — the gateway answering, in detail, that it
+            # did not like the request — was caught as "connection failed" and
+            # printed under "check your internet connection". The one thing it
+            # definitely was not is a network problem: the server replied.
+            raise GatewayError(self._http_error(e)) from e
         except URLError as e:
             raise GatewayError(self._unreachable(e)) from e
         except json.JSONDecodeError as e:
             raise GatewayError(f"Invalid JSON from gateway: {e}") from e
+
+    def _http_error(self, e: HTTPError) -> str:
+        """Turn a rejection into the reason for it.
+
+        The gateway sends its complaint in the response body — FastAPI-style
+        validation errors name the exact field and rule. Reading it costs
+        nothing and is the difference between "422 Unprocessable Entity" and
+        "password: must be at least 8 characters".
+        """
+        detail = ""
+        try:
+            payload = json.loads(e.read().decode("utf-8") or "{}")
+        except Exception:
+            payload = None
+
+        if isinstance(payload, dict):
+            raw = payload.get("detail", payload.get("message", payload.get("error")))
+            if isinstance(raw, list):
+                # FastAPI: [{"loc": ["body","password"], "msg": "...", ...}]
+                parts = []
+                for item in raw:
+                    if not isinstance(item, dict):
+                        parts.append(str(item))
+                        continue
+                    loc = ".".join(str(x) for x in item.get("loc", [])
+                                   if x not in ("body", "query"))
+                    msg = item.get("msg", "invalid")
+                    parts.append(f"{loc}: {msg}" if loc else msg)
+                detail = "; ".join(parts)
+            elif raw:
+                detail = str(raw)
+
+        lines = [f"Gateway rejected the request: HTTP {e.code}"
+                 + (f" — {detail}" if detail else "")]
+
+        if e.code == 422 and not detail:
+            lines += [
+                "",
+                "   422 means the gateway understood the request and refused "
+                "the CONTENTS of it,",
+                "   so this is not a network or address problem. Usually the "
+                "username or password",
+                "   does not meet its rules — try a longer password and a "
+                "username with no spaces.",
+            ]
+        elif e.code == 409:
+            lines += ["", "   That username is already taken."]
+        elif e.code in (401, 403):
+            lines += ["", "   Not authorised — `mpx-cli login` first, or your "
+                          "session has expired."]
+        return "\n".join(lines)
 
     def _unreachable(self, err: object) -> str:
         """Why the gateway did not answer — naming the address AND its source.
