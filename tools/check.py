@@ -1,15 +1,22 @@
 #!/usr/bin/env python3
 """Everything CI should run. `python tools/check.py`
 
-Four things, in the order they are cheapest to fix:
+Five things, in the order they are cheapest to fix:
 
   1. generated files are in sync with the firmware and the CLI
   2. every relative link in the docs points at something that exists
-  3. every example has the three files it needs
-  4. every example compiles for wasm32, and every import it uses is in the ABI
+  3. the prose agrees with the repo: ABI version, symbol count, example names
+  4. every example has the three files it needs
+  5. every example compiles for wasm32, and every import it uses is in the ABI
 
-(4) is skipped with a note when no wasm-capable clang is on PATH, so this is
+(5) is skipped with a note when no wasm-capable clang is on PATH, so this is
 still useful on a machine without the toolchain.
+
+(3) exists because a link check only proves a target exists, not that the
+sentence around it is true. The README said "ABI v3" and "64 host functions"
+for an entire release of v4-and-70, and pointed at examples 01..08 when six
+existed. Every one of those was a first-hour failure for somebody, and not
+one of them was catchable by reading carefully.
 
 The link check exists because the previous docs cited `examples/walk-with-gains`
 as the worked example while that example sat in a folder named `_to_delete/`.
@@ -82,7 +89,66 @@ orphans = [p.name for p in sorted((ROOT / "docs").glob("*.md"))
     "every docs page is linked from the index"
     + ("" if not orphans else f" — orphaned: {', '.join(orphans)}"))
 
-# ── 3. example structure ────────────────────────────────────────────────────
+# ── 3. prose that can go stale ──────────────────────────────────────────────
+section("prose agrees with the repo")
+
+_abi = json.loads((ROOT / "abi" / "host_functions.json").read_text(encoding="utf-8"))
+readme = (ROOT / "README.md").read_text(encoding="utf-8")
+
+# The two numbers a maker acts on before anything else: which firmware to
+# flash, and therefore whether their first skill will run at all.
+m = re.search(r"ABI v(\d+)", readme)
+if not m:
+    fail("README.md does not state an ABI version")
+elif int(m.group(1)) != _abi["abi_version"]:
+    fail(f"README.md says ABI v{m.group(1)}, abi/host_functions.json says "
+         f"v{_abi['abi_version']}")
+else:
+    ok(f"README ABI version — v{_abi['abi_version']}")
+
+m = re.search(r"(\d+) host functions", readme)
+if not m:
+    fail("README.md does not state a host-function count")
+elif int(m.group(1)) != _abi["symbol_count"]:
+    fail(f"README.md says {m.group(1)} host functions, the ABI has "
+         f"{_abi['symbol_count']}")
+else:
+    ok(f"README host-function count — {_abi['symbol_count']}")
+
+# Every examples/NN-name written down anywhere, in any file type, must be a
+# directory that exists. Renaming an example is exactly when this rots.
+EXAMPLE_REF = re.compile(r"examples/(\d\d-[a-z0-9-]+)")
+missing: dict[str, set[str]] = {}
+scanned = 0
+for f in sorted(ROOT.rglob("*")):
+    if not f.is_file() or f.suffix not in {".md", ".c", ".h", ".py", ".json", ".ts", ".wat"}:
+        continue
+    if any(part in {".git", "_to_delete", "node_modules", "build"} for part in f.parts):
+        continue
+    scanned += 1
+    for name in set(EXAMPLE_REF.findall(f.read_text(encoding="utf-8", errors="ignore"))):
+        if not (ROOT / "examples" / name).is_dir():
+            missing.setdefault(name, set()).add(str(f.relative_to(ROOT)))
+if missing:
+    for name, where in sorted(missing.items()):
+        fail(f"examples/{name} does not exist — cited in {', '.join(sorted(where))}")
+else:
+    ok(f"every examples/NN-* reference resolves ({scanned} files scanned)")
+
+# The headers are documentation too, and their doc links are invisible to the
+# markdown link check above. mpx.h pointed at docs/guide/how-motion-works.md
+# for a whole restructure after that page stopped existing.
+DOC_REF = re.compile(r"docs/[A-Za-z0-9_./-]+\.md")
+header_bad = []
+for h in sorted((ROOT / "sdk" / "include").rglob("*.h")):
+    for target in set(DOC_REF.findall(h.read_text(encoding="utf-8", errors="ignore"))):
+        if not (ROOT / target).exists():
+            header_bad.append(f"{h.relative_to(ROOT)} -> {target}")
+(ok if not header_bad else fail)(
+    "doc paths cited inside sdk/include are real"
+    + ("" if not header_bad else " — " + "; ".join(header_bad)))
+
+# ── 4. example structure ────────────────────────────────────────────────────
 section("example structure")
 for d in sorted((ROOT / "examples").iterdir()):
     if not d.is_dir():
@@ -101,7 +167,7 @@ for d in sorted((ROOT / "examples").iterdir()):
         problems.append(f"abi is {m.get('abi')}, expected {SDK_ABI}")
     (ok if not problems else fail)(f"{d.name}" + ("" if not problems else ": " + ", ".join(problems)))
 
-# ── 4. compile ──────────────────────────────────────────────────────────────
+# ── 5. compile ──────────────────────────────────────────────────────────────
 section("compile every example for wasm32")
 clang = shutil.which("clang") or shutil.which("/opt/wasi-sdk/bin/clang")
 if not clang:
