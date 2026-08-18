@@ -19,7 +19,24 @@ from urllib.request import Request, urlopen
 from mpx_cli.sdk.auth import read_token
 
 # ── Defaults (overridable via environment variables) ───────────────
-DEFAULT_GATEWAY_URL = os.environ.get("MPX_GATEWAY_URL", "http://localhost:8080")
+#
+# THE FALLBACK IS THE REAL GATEWAY, NOT LOCALHOST, AND THAT WAY ROUND MATTERS.
+#
+# It used to fall back to http://localhost:8080. On the machine where this was
+# written that was invisible: a .env in the package directory sets
+# MPX_GATEWAY_URL to the real host, __init__.py loads it, and even `--help`
+# printed the real address as "the default". But .env is not committed — that
+# is the entire reason .env.sample exists — so on a fresh clone the variable
+# is unset, the fallback applies, and `mpx-cli signup` dials a port on the
+# user's own machine with nothing behind it. The error is
+# [Errno 111] Connection refused, which reads like the marketplace is down
+# rather than like a default nobody chose.
+#
+# A default should be what works for someone who has configured nothing.
+# Running a gateway on localhost is the special case, so the special case is
+# what sets the variable.
+PRODUCTION_GATEWAY_URL = "http://35.220.215.160:8080"
+DEFAULT_GATEWAY_URL = os.environ.get("MPX_GATEWAY_URL", PRODUCTION_GATEWAY_URL)
 
 
 class GatewayError(Exception):
@@ -62,9 +79,48 @@ class GatewayClient:
                     return json.loads(raw)
                 return {}
         except URLError as e:
-            raise GatewayError(f"Connection to gateway at {self._base} failed: {e}") from e
+            raise GatewayError(self._unreachable(e)) from e
         except json.JSONDecodeError as e:
             raise GatewayError(f"Invalid JSON from gateway: {e}") from e
+
+    def _unreachable(self, err: object) -> str:
+        """Why the gateway did not answer — naming the address AND its source.
+
+        The address the CLI dialled is worth printing, but on its own it does
+        not say where that address came from, and the answer is usually the
+        whole bug: MPX_GATEWAY_URL pointing at a local gateway that is not
+        running. "Connection refused to localhost" is only confusing until you
+        know nobody chose localhost on purpose.
+        """
+        lines = [f"Connection to gateway at {self._base} failed: {err}"]
+        base = self._base
+        if "localhost" in base or "127.0.0.1" in base:
+            src = ("MPX_GATEWAY_URL" if os.environ.get("MPX_GATEWAY_URL")
+                   else "a --gateway argument")
+            lines += [
+                "",
+                f"   {base} is a gateway on YOUR OWN machine, and nothing is "
+                "listening on that port.",
+                f"   It came from {src}. Unless you are deliberately running "
+                "the marketplace locally,",
+                "   that is not the address you want — the real one is:",
+                "",
+                f"     {PRODUCTION_GATEWAY_URL}",
+                "",
+                "   Clear the override (check ./.env and cli/src/mpx_cli/.env, "
+                "and your shell), or",
+                f"   pass it explicitly:  mpx-cli --gateway {PRODUCTION_GATEWAY_URL} signup ...",
+            ]
+        else:
+            lines += [
+                "",
+                "   Check your internet connection. If you are joined to the "
+                "robot's own hotspot,",
+                "   you are on a network with no route out — join your normal "
+                "Wi-Fi for marketplace",
+                "   commands, then switch back to deploy.",
+            ]
+        return "\n".join(lines)
 
     def _request_with_status(
         self,
