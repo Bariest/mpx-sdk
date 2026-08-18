@@ -43,6 +43,16 @@ class Toolchain:
     compile_fn: Callable[[str, str | None], CompileResult] | None = None
     """Callback that compiles a source file to .wasm."""
 
+    tried: list[str] = field(default_factory=list)
+    """One line per candidate location, saying what was found there.
+
+    A missing toolchain used to report only that it was missing, which tells
+    you nothing about *where* to install it or which of several possible
+    installs the CLI is unhappy with. Recording the search means the error can
+    show its work, and "the binary is there but will not run" stops looking
+    identical to "the binary is not there".
+    """
+
 
 @dataclass
 class CompileResult:
@@ -63,6 +73,14 @@ class CompileResult:
 
 # ── Toolchain detection ───────────────────────────────────────────
 
+TIMED_OUT = -2
+"""_run()'s exit code for "the command did not answer in time".
+
+Distinct from -1 (not found) on purpose. Collapsing the two is what made a
+slow disk indistinguishable from an uninstalled compiler.
+"""
+
+
 def _run(cmd: list[str], timeout: int = 10) -> tuple[int, str, str]:
     """Run a command and return (returncode, stdout, stderr)."""
     try:
@@ -76,52 +94,73 @@ def _run(cmd: list[str], timeout: int = 10) -> tuple[int, str, str]:
     except FileNotFoundError:
         return -1, "", "command not found"
     except subprocess.TimeoutExpired:
-        return -1, "", "timed out"
+        return TIMED_OUT, "", "timed out"
 
 
-def _can_target_wasm32(clang: str) -> bool:
-    """Can this clang actually emit wasm32?
+def _probe(tc: Toolchain, label: str, cand: str | None,
+           version_re: str | None = None) -> bool:
+    """Is @p cand a usable toolchain binary? Record what was found either way.
 
-    Answering "is there a clang" is not the same as answering "can I build a
-    skill". An ESP-IDF or Xtensa toolchain puts a clang on PATH with no wasm32
-    target compiled in, and taking it produced "unable to create target: no
-    available targets are compatible with triple wasm32" from `build`, and a
-    confident "ok  WASI SDK" from `doctor` — the two messages together being
-    the exact opposite of what doctor is for. Compiling an empty translation
-    unit costs milliseconds and is the only answer that cannot be wrong.
+    EXISTENCE DECIDES, THE VERSION IS DECORATION — and getting that backwards
+    is a real bug this had. Detection ran `<binary> --version` with a 10 s
+    timeout and treated any non-zero result as "not installed". Running
+    `--version` on WASI SDK's clang means faulting a ~100 MB binary in from an
+    overlay filesystem; on a cold container over Docker Desktop that can take
+    longer than ten seconds. So `mpx-cli deploy` reported MISSING WASI SDK,
+    and the identical command a moment later — same container, nothing
+    rebuilt, page cache now warm — compiled fine.
+
+    A compiler that is present and executable is present. The version probe
+    gets a longer budget, runs only to fill in a label, and can never veto the
+    thing it is describing.
     """
-    rc, _, _ = _run([clang, "--target=wasm32", "-nostdlib", "-c", "-x", "c",
-                     "-o", os.devnull, "-"])
-    return rc == 0
+    if not cand:
+        tc.tried.append(f"{label}: not set")
+        return False
+    if not os.path.isfile(cand):
+        tc.tried.append(f"{label}: no such file ({cand})")
+        return False
+    if not os.access(cand, os.X_OK):
+        tc.tried.append(f"{label}: found at {cand} but not executable")
+        return False
+
+    # 60 s, because the first read of a large binary on a cold container is
+    # slow and being slow is not being absent.
+    rc, out, err = _run([cand, "--version"], timeout=60)
+    if rc == TIMED_OUT:
+        tc.bin = cand
+        tc.version = "unknown (version check timed out)"
+        tc.tried.append(f"{label}: {cand} (usable; version probe timed out)")
+        return True
+    if rc != 0:
+        # Present but genuinely broken — truncated download, half-extracted
+        # archive, missing shared library. "Reinstall", not "install".
+        detail = (err or out).strip().splitlines()
+        tc.tried.append(f"{label}: found at {cand} but --version failed"
+                        + (f" ({detail[0]})" if detail else ""))
+        return False
+
+    tc.bin = cand
+    if version_re:
+        m = re.search(version_re, out)
+        tc.version = m.group(1) if m else out.strip().split("\n")[0]
+    else:
+        tc.version = out.strip().split("\n")[0]
+    tc.tried.append(f"{label}: {cand} ({tc.version})")
+    return True
 
 
 def _detect_wasi() -> Toolchain:
-    """Detect WASI SDK (C/C++ → WASM)."""
+    """Detect WASI SDK (C/C++ → WASM), and remember where it looked."""
     tc = Toolchain(name="WASI SDK", key="wasi", extensions=[".c", ".cc", ".cpp"])
-    # Explicit and well-known WASI locations first; a bare PATH clang last,
-    # because on a machine with an embedded toolchain installed it is the one
-    # least likely to be the right answer.
     candidates = [
-        os.environ.get("WASI_CC"),
-        "/opt/wasi-sdk/bin/clang",
-        r"C:\wasi-sdk\bin\clang.exe",
-        shutil.which("clang"),
+        ("$WASI_CC",             os.environ.get("WASI_CC")),
+        ("clang on PATH",        shutil.which("clang")),
+        ("/opt/wasi-sdk/bin/clang", "/opt/wasi-sdk/bin/clang"),
     ]
-    seen: list[str] = []
-    for cand in candidates:
-        if not cand or cand in seen:
-            continue
-        seen.append(cand)
-        if not (os.path.isfile(cand) or shutil.which(cand)):
-            continue
-        rc, out, _ = _run([cand, "--version"])
-        if rc != 0 or not _can_target_wasm32(cand):
-            continue
-        tc.bin = cand
-        # Extract "version X.Y.Z" from clang version string
-        m = re.search(r"version\s+([\d.]+)", out)
-        tc.version = m.group(1) if m else out.split("\n")[0]
-        break
+    for label, cand in candidates:
+        if _probe(tc, label, cand, r"version\s+([\d.]+)"):
+            break
     return tc
 
 
@@ -129,28 +168,20 @@ def _detect_wabt() -> Toolchain:
     """Detect WABT tools (WAT → WASM)."""
     tc = Toolchain(name="WABT", key="wabt", extensions=[".wat"])
     candidates = [
-        shutil.which("wat2wasm"),
-        "/opt/wabt/bin/wat2wasm",
+        ("wat2wasm on PATH",       shutil.which("wat2wasm")),
+        ("/opt/wabt/bin/wat2wasm", "/opt/wabt/bin/wat2wasm"),
     ]
-    for cand in candidates:
-        if cand and os.path.isfile(cand):
-            rc, out, _ = _run([cand, "--version"])
-            if rc == 0:
-                tc.bin = cand
-                tc.version = out.strip()
-                break
+    for label, cand in candidates:
+        if _probe(tc, label, cand):
+            break
     return tc
 
 
 def _detect_asc() -> Toolchain:
     """Detect AssemblyScript compiler (TS → WASM)."""
     tc = Toolchain(name="AssemblyScript", key="asc", extensions=[".ts"])
-    cand = shutil.which("asc")
-    if cand:
-        rc, out, _ = _run([cand, "--version"])
-        if rc == 0:
-            tc.bin = cand
-            tc.version = out.strip()
+    # asc is a node shim, so the first run pays node's startup as well.
+    _probe(tc, "asc on PATH", shutil.which("asc"))
     return tc
 
 
@@ -197,7 +228,24 @@ def _compile_c(source: str, output: str | None) -> CompileResult:
     """Compile a C/C++ file using WASI SDK."""
     tc = _detect_wasi()
     if not tc.bin:
-        return CompileResult(False, "❌ WASI SDK not found — install clang for wasm32 target")
+        # Show the search, not just the verdict. "install clang for wasm32
+        # target" is advice you cannot act on when clang is supposed to be in
+        # the dev container already — the useful question is which of the
+        # three places the CLI looks came up empty, and whether the binary is
+        # absent or merely broken.
+        lines = ["❌ WASI SDK not found — cannot compile C to WebAssembly.",
+                 "   Looked in:"]
+        lines += [f"     · {t}" for t in tc.tried]
+        lines += [
+            "",
+            "   In the dev container it lives at /opt/wasi-sdk (installed by",
+            "   .devcontainer/Dockerfile and put on PATH there). If it is",
+            "   missing, the container is not the one the Dockerfile builds —",
+            "   rebuild it: VS Code → Dev Containers: Rebuild Container.",
+            "   Outside a container, install WASI SDK and either put its bin/",
+            "   on PATH or set WASI_CC=/path/to/wasi-sdk/bin/clang.",
+        ]
+        return CompileResult(False, "\n".join(lines))
 
     src = Path(source)
     out = Path(output) if output else src.with_suffix(".wasm")

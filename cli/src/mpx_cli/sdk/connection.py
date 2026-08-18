@@ -23,6 +23,42 @@ class RobotError(Exception):
     """Raised when the robot returns a non-OK response."""
 
 
+def _unreachable_hint(host: str, port: int, err: object) -> str:
+    """Why the robot did not answer, and the two things it is usually.
+
+    "Connection to 192.168.2.1:80 failed: <urlopen error timed out>" is
+    accurate and unhelpful: it names an address without saying that the
+    address is a CHOICE, and that the default is the robot's own hotspot.
+    The robot has two of them — 192.168.2.1 when you are joined to MPX-Dog,
+    and a DHCP address on your own network when it is joined to yours — and
+    the commonest failure by a distance is aiming at one while connected to
+    the other.
+    """
+    lines = [f"Connection to {host}:{port} failed: {err}"]
+    if host == "192.168.2.1":
+        lines += [
+            "",
+            "   192.168.2.1 is the robot's OWN hotspot, which only answers "
+            "while you are joined to it.",
+            "   If the robot is on your Wi-Fi instead, point at the address it "
+            "has there — the robot's",
+            "   log prints it as `sta=connected ... ip=<address>`:",
+            "",
+            "     mpx-cli deploy --ip 192.168.1.50        (once)",
+            "     echo 'MPX_HOST=192.168.1.50' > .env     (from now on)",
+        ]
+    else:
+        lines += [
+            "",
+            f"   Nothing answered at {host}. Check the robot is powered and on "
+            "the same network,",
+            "   and that the address still matches — a DHCP lease can move it "
+            "between reboots.",
+            "   `mpx-cli doctor` checks this and the rest of the setup.",
+        ]
+    return "\n".join(lines)
+
+
 class RobotClient:
     """HTTP client for the MPX-Dog robot's REST API.
 
@@ -93,7 +129,7 @@ class RobotClient:
             suffix = f": {detail}" if detail else ""
             raise RobotError(f"Robot returned HTTP {e.code}{suffix}") from e
         except URLError as e:
-            raise RobotError(f"Connection to {self.host}:{self.port} failed: {e}") from e
+            raise RobotError(_unreachable_hint(self.host, self.port, e)) from e
         except json.JSONDecodeError as e:
             raise RobotError(f"Invalid JSON from robot: {e}") from e
 
@@ -113,7 +149,7 @@ class RobotClient:
             with urlopen(req, timeout=15) as resp:
                 return resp.read()
         except URLError as e:
-            raise RobotError(f"Connection to {self.host}:{self.port} failed: {e}") from e
+            raise RobotError(_unreachable_hint(self.host, self.port, e)) from e
 
     # ── Skills API ───────────────────────────────────────────────
 
