@@ -247,7 +247,10 @@ typedef struct {
 } mpx_bus_state_t;
 
 /** Refresh the firmware's cached state for all joints. One bus sweep. */
-static inline int mpx_bus_poll(void) { return servo_poll(); }
+/* mpx_bus_poll() and mpx_bus_scan() were here, both `return servo_*();` with
+ * no argument, no return value you could act on, and no caller anywhere in the
+ * SDK, the examples or the docs. They are bring-up tools for someone holding a
+ * board, and they are still in mpx/abi.h as servo_poll() and servo_scan(). */
 
 static inline int mpx_bus_read(mpx_joint_t j, mpx_bus_state_t *out)
 {
@@ -264,7 +267,6 @@ static inline int mpx_bus_read_all(mpx_bus_state_t out[12])
 
 /** Bitmask of joints that answered: bit 0 is joint 1. 0xFFF means all twelve.
  *  The quickest way to find a servo that is not talking. */
-static inline int mpx_bus_scan(void) { return servo_scan(); }
 
 #ifdef __cplusplus
 }

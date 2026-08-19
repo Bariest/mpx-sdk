@@ -117,7 +117,7 @@ MPX_EXPORT void on_tick(int dt_ms)
     (void)dt_ms;
 
     float roll, pitch;
-    if (mpx_imu_tilt(&roll, &pitch) != MPX_OK) { mpx_tick_end(); return; }
+    if (mpx_imu_tilt(&roll, &pitch) != MPX_OK) { mpx_tick_stop(); return; }
 
     /* An OVERLAY adds to whatever is already driving the robot rather than
      * replacing it. Clamped to +/-20 by the firmware, so a trim cannot

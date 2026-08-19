@@ -37,6 +37,7 @@
 #include "mpx/gaits.h"
 #include "mpx/robot.h"
 #include "mpx/leg.h"
+#include "mpx/health.h"
 #include "mpx/bus.h"
 #include "mpx/motion.h"
 #include "mpx/live.h"

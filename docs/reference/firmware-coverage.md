@@ -108,7 +108,7 @@ Reading the robot back.
 | `robot::read_current()` | `robot_read_current()` |  |
 | `robot::ping_servo()` | `mpx_joint_ping()` |  |
 | `robot::imu_read()` | `mpx_imu()` · `mpx_imu_tilt()` |  |
-| `robot::imu_print()` | `mpx_imu_log()` |  |
+| `robot::imu_print()` | `robot_imu_print()` | Prints to the robot's own console, where a skill author is not looking. mpx_imu() returns the numbers; log or trace them yourself. |
 
 ### Calibration
 

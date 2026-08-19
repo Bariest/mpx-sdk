@@ -60,17 +60,32 @@ typedef enum {
     MPX_OWN_BUS    = 4,  /**< The servo bus (see mpx/bus.h).                  */
 } mpx_domain_t;
 
-/** Claim a domain. MPX_OK, or MPX_ERR_BUSY if another domain holds it. */
+/** Claim a domain. MPX_OK, or MPX_ERR_BUSY if another domain holds it.
+ *
+ *  WHAT THIS ACTUALLY BUYS YOU, now that it buys something:
+ *
+ *  Claiming MPX_OWN_FEET or MPX_OWN_JOINTS stops the firmware's gait task
+ *  rewriting the twelve goal positions. Unclaimed, its idle branch overwrites
+ *  all of them with the neutral stand every 15 ms while your skill runs. It
+ *  skips the send, so the last frame you SENT still holds -- but the buffer
+ *  under it does not. Set two joints, send, then send again later without
+ *  re-setting them, and the first two snap back to neutral.
+ *
+ *  So "stage a frame, then send it" is only reliably true between a claim and
+ *  its release. Inside one tight sequence you will usually win the race; a
+ *  pose you build across several milliseconds you will not.
+ *
+ *  It also refuses writes from OTHER layers with MPX_ERR_BUSY, which turns a
+ *  fight between your own layers into an error code instead of a twitch. */
 static inline int mpx_take(mpx_domain_t d) { return mpx_control_take((int)d); }
 
-/** Give the claim back. Always succeeds. */
+/** Give the claim back, and let the gait task have the buffer again. */
 static inline int mpx_release(void) { return mpx_control_release(); }
 
-/** Which domain currently holds the joints, or MPX_OWN_NONE. */
-static inline mpx_domain_t mpx_owner(void)
-{
-    return (mpx_domain_t)mpx_control_owner();
-}
+/* mpx_owner() was here. It answered "which domain holds it" -- but only one
+ * skill runs at a time, so the only possible answer was one you had written
+ * yourself four lines earlier. Reachable as mpx_control_owner() in mpx/abi.h.
+ * mpx_take() returning MPX_ERR_BUSY is the useful form of the question. */
 
 /* ═══════════════════════════════════════════════════════════════════════════
  *  Gaits — the robot's own movements
@@ -109,7 +124,9 @@ static inline int mpx_gait_for(mpx_gait_t g, int ms)
 }
 
 /** Which gait is running, as the firmware's numbering. */
-static inline int mpx_gait_current(void) { return robot_get_mode(); }
+/* mpx_gait_current() was here: `return robot_get_mode();`, a rename of a call
+ * mpx/abi.h already exports, returning a firmware enum this header does not
+ * define. Nothing in the SDK or the examples used it. */
 
 /* ═══════════════════════════════════════════════════════════════════════════
  *  Driving — continuous, analog movement
@@ -283,14 +300,11 @@ static inline int mpx_gait_config_set(mpx_gait_config_t c)
                             c.stride_mm, c.tilt_deg);
 }
 
-/** The firmware defaults, for putting things back the way you found them. */
-static inline mpx_gait_config_t mpx_gait_config_default(void)
-{
-    mpx_gait_config_t c;
-    c.period_ms = 80; c.height_mm = 70; c.lift_mm = 10;
-    c.stride_mm = 10; c.tilt_deg  = 10;
-    return c;
-}
+/* mpx_gait_config_default() was here. It returned five literals -- 80, 70, 10,
+ * 10, 10 -- as a struct, which is not a default so much as a copy of one that
+ * silently goes stale if the firmware's ever change. Read the real ones with
+ * mpx_gait_config() BEFORE you touch anything, and set them back on the way
+ * out. That works whatever the defaults are. */
 
 /* ═══════════════════════════════════════════════════════════════════════════
  *  IMU — which way is up
@@ -327,7 +341,10 @@ static inline int mpx_imu_tilt(float *roll_deg, float *pitch_deg)
 }
 
 /** Print the current IMU reading to the robot's log. */
-static inline int mpx_imu_log(void) { return robot_imu_print(); }
+/* mpx_imu_log() was here: `return robot_imu_print();`. A rename of an ABI call
+ * that prints to the robot's own console, where a skill's author cannot see
+ * it. mpx_imu() gives you the numbers; mpx_log_f() or mpx_trace_f() puts them
+ * somewhere you are actually looking. */
 
 #ifdef __cplusplus
 }

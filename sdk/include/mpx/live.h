@@ -78,8 +78,9 @@ static inline int mpx_tick_hz(float hz)
     return mpx_tick_every((int)(1000.0f / hz + 0.5f));
 }
 
-/** Stop ticking. The skill then ends normally, through on_stop(). */
-static inline int mpx_tick_end(void) { return mpx_tick_stop(); }
+/* mpx_tick_end() was here. It was `return mpx_tick_stop();` — a second name
+ * for a function mpx/abi.h already exports under a perfectly good one. Call
+ * mpx_tick_stop() and the skill ends normally, through on_stop(). */
 
 /* ═══════════════════════════════════════════════════════════════════════════
  *  Overlay — add to what is already happening
@@ -172,11 +173,8 @@ static inline int mpx_trace_f(const char *name, float value)
     return mpx_trace(name, value);
 }
 
-/** Record a named integer. */
-static inline int mpx_trace_i(const char *name, int value)
-{
-    return mpx_trace(name, (float)value);
-}
+/* mpx_trace_i() was here. It was mpx_trace_f() with a cast you can write
+ * yourself, and every trace becomes a float on the wire regardless. */
 
 #ifdef __cplusplus
 }

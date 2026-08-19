@@ -301,13 +301,12 @@
     },
     "imu_print": {
       "status": "exposed",
-      "sdk": [
-        "mpx_imu_log"
-      ],
+      "sdk": [],
       "abi": [
         "robot_imu_print"
       ],
-      "area": "sensing"
+      "area": "sensing",
+      "note": "Prints to the robot's own console, where a skill author is not looking. mpx_imu() returns the numbers; log or trace them yourself."
     },
     "get_offset": {
       "status": "exposed",

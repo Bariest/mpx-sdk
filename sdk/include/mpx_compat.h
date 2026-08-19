@@ -32,6 +32,20 @@
 #include "mpx.h"
 
 /* ── Removed in the API reduction; here so old skills still build ────────── */
+static inline int mpx_tick_end(void)           { return mpx_tick_stop(); }
+static inline int mpx_trace_i(const char *n, int v) { return mpx_trace(n, (float)v); }
+static inline int mpx_gait_current(void)       { return robot_get_mode(); }
+static inline int mpx_imu_log(void)            { return robot_imu_print(); }
+static inline int mpx_bus_poll(void)           { return servo_poll(); }
+static inline int mpx_bus_scan(void)           { return servo_scan(); }
+static inline mpx_domain_t mpx_owner(void)     { return (mpx_domain_t)mpx_control_owner(); }
+static inline mpx_gait_config_t mpx_gait_config_default(void)
+{
+    mpx_gait_config_t c;
+    c.period_ms = 80; c.height_mm = 70; c.lift_mm = 10;
+    c.stride_mm = 10; c.tilt_deg  = 10;
+    return c;
+}
 static inline int mpx_walk_speed_set(int mm_s) { return mpx_set_walk_speed(mm_s); }
 static inline int mpx_walk_speed(void)         { return mpx_get_walk_speed(); }
 static inline int mpx_body_speed(int dps)      { return robot_set_attitude_speed(dps); }
