@@ -31,11 +31,18 @@ MPX_EXPORT void on_start(void)
      * The `ease` on a key says how you ARRIVE at it. Linear everywhere reads
      * as mechanical; easing the ends is most of what makes motion look
      * deliberate rather than commanded. */
+    /* Both front feet forward and lower — the shape of a bow. mpx_stance_with()
+     * places one foot and leaves the other three where they are, so a stance is
+     * built by naming exactly what moves. */
+    mpx_stance_t down = mpx_stance_stand();
+    down = mpx_stance_with(down, MPX_FR, reach, 0.0f, -55.0f);
+    down = mpx_stance_with(down, MPX_FL, reach, 0.0f, -55.0f);
+
     mpx_stance_key_t bow[] = {{
-        {{    0, mpx_stance_stand(),                 MPX_EASE_LINEAR }},
-        {{  700, mpx_stance_front(reach, -55.0f),    MPX_EASE_INOUT  }},
-        {{ 1300, mpx_stance_front(reach, -55.0f),    MPX_EASE_LINEAR }},
-        {{ 2000, mpx_stance_stand(),                 MPX_EASE_OUT    }},
+        {{    0, mpx_stance_stand(), MPX_EASE_LINEAR }},
+        {{  700, down,               MPX_EASE_INOUT  }},
+        {{ 1300, down,               MPX_EASE_LINEAR }},
+        {{ 2000, mpx_stance_stand(), MPX_EASE_OUT    }},
     }};
 
     if (mpx_stance_play(bow, 4, mpx_play(50, repeats)) != MPX_OK) {{

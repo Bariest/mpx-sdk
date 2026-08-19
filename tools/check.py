@@ -169,7 +169,7 @@ for d in sorted((ROOT / "examples").iterdir()):
     (ok if not problems else fail)(f"{d.name}" + ("" if not problems else ": " + ", ".join(problems)))
 
 # ── 5. compile ──────────────────────────────────────────────────────────────
-section("compile every example for wasm32")
+section("compile every example, and the init template, for wasm32")
 def _wasm_clang() -> "str | None":
     """The first clang that can actually emit wasm32.
 
@@ -221,7 +221,20 @@ else:
     outdir = ROOT / "build" / "_check"
     outdir.mkdir(parents=True, exist_ok=True)
 
-    for src in sorted((ROOT / "examples").glob("*/src/*.c")):
+    # The `mpx-cli init` template compiles TOO. It is the first C a maker ever
+    # runs, and it is not under examples/, so an API change could break it
+    # while every check here stayed green -- which is exactly what happened:
+    # mpx_stance_front() was deleted, all six examples were updated, and
+    # `mpx-cli init` kept emitting a skill that would not build.
+    sources = list(sorted((ROOT / "examples").glob("*/src/*.c")))
+    tpl = ROOT / "cli" / "src" / "mpx_cli" / "commands" / "resource" / "skill.c.template"
+    if tpl.exists():
+        rendered = outdir / "init_template.c"
+        rendered.write_text(tpl.read_text(encoding="utf-8").format(name="my_move"),
+                            encoding="utf-8")
+        sources.append(rendered)
+
+    for src in sources:
         out = outdir / (src.stem + ".wasm")
         r = subprocess.run(
             [clang, "--target=wasm32", "-nostdlib", "-O2",
