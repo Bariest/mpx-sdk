@@ -45,7 +45,9 @@ def _unreachable_hint(host: str, port: int, err: object) -> str:
             "   log prints it as `sta=connected ... ip=<address>`:",
             "",
             "     mpx-cli deploy --ip 192.168.1.50        (once)",
-            "     echo 'MPX_HOST=192.168.1.50' > .env     (from now on)",
+            ("     'MPX_HOST=192.168.1.50' | Out-File -Encoding utf8 .env"
+             if os.name == "nt" else
+             "     echo 'MPX_HOST=192.168.1.50' > .env") + "     (from now on)",
         ]
     else:
         lines += [

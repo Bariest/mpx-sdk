@@ -22,6 +22,18 @@ from mpx_cli.sdk.project import find_project
 OK, WARN, BAD = "ok  ", "warn", "FAIL"
 
 
+def _env_hint(line: str) -> str:
+    """The right way to write a .env for the shell the user is actually in.
+
+    PowerShell's `>` writes UTF-16LE. mpx-cli reads that correctly now, but
+    telling someone to run a command that produces a file in an encoding
+    nothing else on their machine expects is still bad advice.
+    """
+    if os.name == "nt":
+        return f"'{line}' | Out-File -Encoding utf8 .env"
+    return f"echo '{line}' > .env"
+
+
 def add_doctor_parser(sub: argparse._SubParsersAction) -> None:
     from mpx_cli.cli import robot_opts
     p = sub.add_parser("doctor", parents=[robot_opts()],
@@ -132,9 +144,14 @@ def cmd_doctor(args: argparse.Namespace) -> None:
             n = len(skills.get("files", skills) if isinstance(skills, dict) else skills)
             _line(OK, "reachable", f"{host}:{port} — {n} skill(s) installed")
         except Exception as exc:
-            _line(WARN, "not reachable", f"{host}:{port} — {type(exc).__name__}",
-                  "Join the robot's Wi-Fi (MPX-Dog), or set the address:\n"
-                  "  echo MPX_HOST=192.168.1.42 > .env")
+            # exc, not type(exc).__name__. RobotError already carries a
+            # written explanation from _unreachable_hint(); printing the class
+            # name threw it away and left the user with the word "RobotError".
+            detail = str(exc).strip().splitlines()[0] if str(exc).strip() else type(exc).__name__
+            _line(WARN, "not reachable", f"{host}:{port} — {detail}",
+                  "Join the robot's Wi-Fi (MPX-Dog), or point at it directly:\n"
+                  "  mpx-cli doctor --ip 192.168.1.42        (just this once)\n"
+                  "  " + _env_hint("MPX_HOST=192.168.1.42") + "   (from now on)")
 
     # ── Verdict ───────────────────────────────────────────────────────────
     print()

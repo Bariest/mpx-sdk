@@ -137,9 +137,18 @@ clean:    ; rm -rf build
     print()
     inc = sdk_include_dir()
     print(f"SDK headers: {inc if inc else 'NOT FOUND — set MPX_SDK_INCLUDE'}")
+    # Only the toolchain for the language you just chose is required. Printing
+    # "MISSING WABT" to someone who asked for a .c skill reads like the setup
+    # failed, when nothing about it is wrong -- and `mpx-cli doctor` says
+    # "Only needed for .wat skills" about the very same tool one command later.
+    needed = {"c": "wasi", "cc": "wasi", "cpp": "wasi", "wat": "wabt", "ts": "asc"}.get(ext, "wasi")
     for key, tc in detect_all().items():
-        mark = "ok  " if tc.bin else "MISSING"
-        print(f"  {mark} {tc.name}" + (f" ({tc.version})" if tc.bin else ""))
+        if tc.bin:
+            print(f"  ok        {tc.name}" + (f" ({tc.version})" if tc.version else ""))
+        elif key == needed:
+            print(f"  MISSING   {tc.name} — needed to build a .{ext} skill")
+        else:
+            print(f"  optional  {tc.name} — only for .{'wat' if key == 'wabt' else 'ts'} skills")
 
     print(f"""
 Next:
