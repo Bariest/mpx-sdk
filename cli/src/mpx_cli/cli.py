@@ -22,7 +22,7 @@ from mpx_cli.commands.logs import add_logs_parser, cmd_logs
 from mpx_cli.commands.install import add_install_parser, cmd_install
 from mpx_cli.commands.gaits import add_gaits_parser, cmd_gaits
 from mpx_cli.commands.doctor import add_doctor_parser, cmd_doctor
-from mpx_cli.commands.setup import add_setup_parser
+from mpx_cli.commands.setup import add_setup_parser, run_setup
 from mpx_cli.commands.trace import add_trace_parser, cmd_trace
 from mpx_cli.commands.movements import (add_movements_parser, cmd_movements,
                                         cmd_stop, cmd_safe_mode)
@@ -150,14 +150,31 @@ def main(argv: list[str] | None = None) -> None:
         "info": cmd_info,
         "versions": cmd_versions,
         "robot": cmd_robot,
+        "setup": run_setup,
     }
+
+    # A command registered with set_defaults(func=...) dispatches through that,
+    # so it cannot be missing from the table below. This table came first and
+    # is kept for the commands that rely on it -- including `ls`, which needs
+    # its own entry because argparse dispatches an alias under the alias name.
+    #
+    # Getting this wrong used to cost a debugging session: the parser accepted
+    # the command, the dict did not have it, and the top-level handler printed
+    # KeyError('setup') as the single word "❌ 'setup'". A command name is not
+    # an error message.
+    handler = getattr(args, "func", None) or commands.get(args.command)
+    if handler is None:
+        print(f"❌ '{args.command}' is not wired up. The parser accepts it but "
+              f"nothing runs it — that is a bug in mpx-cli, not in your setup.",
+              file=sys.stderr)
+        sys.exit(1)
 
     try:
         # Commands return False to signal a handled failure (a connection
         # refused, a missing file) that has already been reported to the user.
         # Without this they printed an error and still exited 0, so shell
         # chains and CI treated a failed upload as success.
-        if commands[args.command](args) is False:
+        if handler(args) is False:
             sys.exit(1)
     except SystemExit:
         raise

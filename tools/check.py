@@ -169,6 +169,30 @@ for d in sorted((ROOT / "examples").iterdir()):
     (ok if not problems else fail)(f"{d.name}" + ("" if not problems else ": " + ", ".join(problems)))
 
 # ── 5. compile ──────────────────────────────────────────────────────────────
+section("every CLI command actually runs")
+# `mpx-cli setup` shipped accepted-by-the-parser and dispatched-by-nothing,
+# because registration and dispatch live in two places. It printed the single
+# word "❌ 'setup'" -- a KeyError wearing an error message's clothes. The `ls`
+# alias had already hit this once. Check it instead of remembering it.
+try:
+    sys.path.insert(0, str(ROOT / "cli" / "src"))
+    import argparse as _ap
+    import inspect as _inspect
+    from mpx_cli import cli as _cli
+    _p = _cli.build_parser()
+    _sub = next(a for a in _p._actions if isinstance(a, _ap._SubParsersAction))
+    _src = _inspect.getsource(_cli.main)
+    _unwired = [n for n in sorted(_sub.choices)
+                if "func" not in _sub.choices[n]._defaults and f'"{n}":' not in _src]
+    if _unwired:
+        fail("registered but nothing runs them: " + ", ".join(_unwired)
+             + "\n  Add set_defaults(func=...) in the parser, or an entry in"
+               " cli.main()'s commands dict.")
+    else:
+        ok(f"all {len(_sub.choices)} subcommands dispatch to a handler")
+except Exception as _exc:
+    ok(f"skipped — could not import mpx_cli ({_exc})")
+
 section("native install matches the container")
 # `mpx-cli setup` and .devcontainer/Dockerfile both install the WASI SDK. If
 # they ever pin different versions, "works in Docker" and "works natively"
