@@ -20,9 +20,9 @@ layer can express any of that** — it is the only reason to come down here.
 
 ```c
 mpx_bus_take();
-mpx_gains_all(65.0f, 800.0f);                              /* stock */
+mpx_gain_set(MPX_ALL_JOINTS, MPX_PARAM_KP_POSITION, 65.0f);  /* stock */
 mpx_gain_set(MPX_FR_KNEE, MPX_PARAM_KP_POSITION, 95.0f);   /* one stiffer */
-mpx_bus_stage(MPX_FR_KNEE, -18.0f, 400.0f, 0.0f, 0.0f);
+mpx_bus_move(MPX_FR_KNEE, -18.0f);
 mpx_bus_send();
 mpx_bus_release();
 ```
@@ -61,9 +61,9 @@ the board runs a **current** loop, deciding how the motor produces the torque
 the position loop asked for:
 
 ```c
-mpx_current_kp (MPX_FR_KNEE, 40.0f);   /* crisper torque; too high and it buzzes */
-mpx_current_kff(MPX_FR_KNEE, 12.0f);   /* stops it sagging under weight          */
-mpx_max_effort (MPX_FR_KNEE, 0.6f);    /* 0..1 — a physical torque ceiling       */
+mpx_gain_set(MPX_FR_KNEE, MPX_PARAM_KP_CURRENT,  0.0009f);  /* crisper torque   */
+mpx_gain_set(MPX_FR_KNEE, MPX_PARAM_KFF_CURRENT, 0.00026f); /* stops it sagging */
+mpx_gain_set(MPX_FR_KNEE, MPX_PARAM_MAX_PWM_DUTY_CYCLE, 0.6f); /* torque ceiling */
 ```
 
 `kff_current` is the useful one. A pure Kp loop has to be *off target* to
@@ -71,7 +71,8 @@ produce force, so a joint sags under constant load — which on a quadruped is
 the robot's own weight. Feed-forward supplies that standing torque up front and
 the droop goes away.
 
-`mpx_max_effort_all(0.6f)` caps every joint at once. It is the cheapest safety
+`mpx_gain_set(MPX_ALL_JOINTS, MPX_PARAM_MAX_PWM_DUTY_CYCLE, 0.6f)` caps every
+joint at once. It is the cheapest safety
 measure available while you are developing a movement near furniture.
 
 ## The thing only this layer can do
@@ -80,7 +81,7 @@ Change stiffness *during* a motion:
 
 ```c
 float soft = 90.0f - 60.0f * t;                       /* stiff → compliant */
-mpx_bus_stage(MPX_FR_KNEE, -18.0f * t, 400.0f, soft, 900.0f);
+mpx_bus_stage_ex(MPX_FR_KNEE, -18.0f * t, 400.0f, soft, 900.0f);
 mpx_bus_send();
 ```
 
@@ -89,8 +90,8 @@ not a pose — it is a *feel*, and it is invisible to every other layer.
 
 ## A note on angle frames
 
-`mpx_bus_stage()` takes the same relative degrees as the rest of the SDK.
-There is also `mpx_bus_stage_abs()`, which takes the driver board's own
+`mpx_bus_stage()` takes the same relative degrees as the rest of the SDK, and
+is now the only convention. The 0–270 wire frame is reachable through the
 0–270° frame where 135 is centre. Prefer the first: one angle convention in
 your code is worth more than matching the wire.
 

@@ -290,14 +290,24 @@ The lowest layer: per-joint Kp/Kd and direct current control.
 ```c
 mpx_bus_take();                                   /* parks the gait */
 mpx_gain_set(MPX_FR_KNEE, MPX_PARAM_KP_POSITION, 95.0f);
-mpx_bus_stage(MPX_FR_KNEE, deg, 400.0f, 0, 0);
-mpx_bus_send();
+mpx_bus_move(MPX_FR_KNEE, -8.0f);                 /* one joint, one call */
 mpx_bus_release();
 ```
 
-Two things bite here. `mpx_bus_*` speaks the **absolute** 0–270° frame, not the
-±135° one — that is deliberate, so you cannot reach it by accident. And you
+Everything here is the same ±135° relative frame as the rest of the SDK. You
 cannot walk while holding the bus: take it, set gains, release, then gait.
+
+Moving several joints *together* is the one case that needs two steps, because
+one bus transaction per frame is what stops the robot juddering:
+
+```c
+mpx_bus_stage(MPX_FR_SHOULDER, 12.0f);
+mpx_bus_stage(MPX_FR_KNEE,     -8.0f);
+mpx_bus_send();                       /* nothing moves until this line */
+```
+
+`mpx_bus_stage_ex()` adds a per-frame current cap and gains, for when
+stiffness is part of the motion.
 
 Five parameters return `MPX_ERR_READONLY` from a skill: the three calibration
 slots, plus `REVERSE_MOTOR` and `REVERSE_POSITION_SENSOR`. Change those from
@@ -310,7 +320,7 @@ Three places, and it matters which you use.
 
 | | How | Persists? |
 |---|---|---|
-| **From a skill** | `mpx_gain_set()`, `mpx_gains_all()` | until reboot — and until *you* reset it |
+| **From a skill** | `mpx_gain_set()` | until reboot — and until *you* reset it |
 | **Servo Studio** | robot web UI → Settings → Servo Testing | until reboot |
 | **Burnt to flash** | `mpx_gain_save()` | **survives reboot** |
 
@@ -324,23 +334,24 @@ board runs a **current** loop, deciding how the motor produces the torque the
 position loop asked for. That is what you reach for when a joint arrives in the
 right place but arrives *badly*:
 
-| Gain | Stock | Studio step | One joint | All twelve |
-|---|---|---|---|---|
-| Kp position | `65` | 0.01 | `mpx_gain_set(j, MPX_PARAM_KP_POSITION, v)` | `mpx_gains_all(kp, kd)` |
-| Kd position | `800` | 0.01 | `mpx_gain_set(j, MPX_PARAM_KD_POSITION, v)` | ↑ same call |
-| Kp current | `0.0006` | 0.0001 | `mpx_current_kp(j, v)` | `mpx_current_all(kp, kff)` |
-| Kff current | `0.00022` | 0.00001 | `mpx_current_kff(j, v)` | ↑ same call |
-| Max PWM duty | — | 0.01 | `mpx_max_effort(j, 0..1)` | `mpx_max_effort_all(0..1)` |
+**One function sets every gain**, on one joint or on all twelve:
 
-**Two bulk calls, one per loop — not one call taking four numbers.** That is
-deliberate. A single `mpx_gains_all(65, 800, 0.0006, 0.00022)` puts values five
-orders of magnitude apart side by side as unlabelled arguments, where swapping
-two is both catastrophic and invisible; this SDK has already shipped that
-mistake once. Split by loop, every argument list holds numbers of the same size.
+```c
+mpx_gain_set(joint_or_MPX_ALL_JOINTS, MPX_PARAM_..., value);
+```
 
-Max PWM duty is in neither, because it is a torque **ceiling** rather than a
-tuned gain — if it rode along with the gains, every stiffness change would
-quietly reset a safety limit you set on purpose.
+| Gain | Parameter | Stock | Studio step |
+|---|---|---|---|
+| Kp position | `MPX_PARAM_KP_POSITION` | `65` | 0.01 |
+| Kd position | `MPX_PARAM_KD_POSITION` | `800` | 0.01 |
+| Kp current | `MPX_PARAM_KP_CURRENT` | `0.0006` | 0.0001 |
+| Kff current | `MPX_PARAM_KFF_CURRENT` | `0.00022` | 0.00001 |
+| Max PWM duty | `MPX_PARAM_MAX_PWM_DUTY_CYCLE` | — | 0.01 |
+
+There used to be five wrapper functions for these. The parameter names carry
+the meaning better than the wrappers did — `MPX_PARAM_KP_CURRENT` says which
+loop as well as which gain — and `mpx/params.h` is generated from the driver
+board's own table, so the names cannot drift from the wire.
 
 **Do not carry a number across the two loops.** They are in different units and
 about five orders of magnitude apart: `65` is a sane position gain and a
@@ -348,14 +359,20 @@ catastrophic current gain — the joint sings, gets hot, and nothing on screen
 says why. Scale from `MPX_KP_CURRENT_STOCK` and `MPX_KFF_CURRENT_STOCK` rather
 than typing an absolute value.
 
-`mpx_gains_stock()` restores all four on all twelve joints. Max PWM duty is a
-safety ceiling rather than a tuned gain, so it has no stock value and is not
-part of that; `mpx_max_effort_all(1.0f)` gives the authority back and
-`mpx_max_effort_all(0.6f)` is the cheapest safety measure available while you
-are developing a movement.
+Max PWM duty is a torque **ceiling** rather than a tuned gain, so
+`mpx_gains_stock()` does not touch it; set it back with
+`mpx_gain_set(MPX_ALL_JOINTS, MPX_PARAM_MAX_PWM_DUTY_CYCLE, 1.0f)`. It is
+clamped to 0..1 inside `mpx_gain_set`.
 
-`mpx_max_effort_all(0.6f)` caps every joint at once, which is the cheapest
-safety measure available while you are developing a movement.
+**Do not carry a number across the two loops.** They are in different units and
+about five orders of magnitude apart: `65` is a sane position gain and a
+catastrophic current gain — the joint sings, gets hot, and nothing on screen
+says why. Scale from `MPX_KP_CURRENT_STOCK` and `MPX_KFF_CURRENT_STOCK` rather
+than typing an absolute value.
+
+`mpx_gains_stock()` restores all four on all twelve joints — call it at the end
+of `on_start` **and** in `on_stop`. Capping duty at `0.6f` while you develop a
+movement is the cheapest safety measure available.
 
 **Five slots are refused from a skill.** Three are calibration; the other two,
 `REVERSE_MOTOR` and `REVERSE_POSITION_SENSOR`, flip a *direction* — write one

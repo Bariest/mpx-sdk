@@ -33,15 +33,12 @@ MPX_EXPORT void on_start(void)
      * Kp is how hard the motor pulls towards its target; Kd damps the
      * approach. Stock is Kp 65, Kd 800.
      *
-     * There are FOUR tuned gains, in two loops, set by two paired calls:
-     *
-     *   mpx_gains_all  (kp, kd)            the POSITION loop — this one
-     *   mpx_current_all(kp_cur, kff_cur)   the CURRENT loop  — section A2
-     *
-     * They are separate on purpose: one call taking all four would put 65 and
-     * 0.0006 side by side as unlabelled arguments, and swapping them wrecks a
-     * joint without any visible sign. mpx_gains_stock() puts all four back. */
-    mpx_gains_all(65.0f, 800.0f);
+     * ONE function sets every gain: mpx_gain_set(joint, PARAM, value).
+     * MPX_ALL_JOINTS in the joint slot means all twelve. The parameter name
+     * carries the meaning that a pile of wrapper functions used to —
+     * MPX_PARAM_KP_CURRENT says which loop as well as which gain. */
+    mpx_gain_set(MPX_ALL_JOINTS, MPX_PARAM_KP_POSITION, 65.0f);
+    mpx_gain_set(MPX_ALL_JOINTS, MPX_PARAM_KD_POSITION, 800.0f);
     mpx_gain_set(MPX_FR_KNEE, MPX_PARAM_KP_POSITION, 95.0f);   /* one stiffer */
 
     float kp = 0.0f;
@@ -60,16 +57,15 @@ MPX_EXPORT void on_start(void)
      * POSITION loop above and about 100,000x too large here — the joint sings,
      * gets hot, and you conclude the robot is broken. Scale from the stock
      * constants rather than typing an absolute value. */
-    mpx_current_kp (MPX_FR_KNEE, MPX_KP_CURRENT_STOCK  * 1.5f);  /* 0.00090 */
-    mpx_current_kff(MPX_FR_KNEE, MPX_KFF_CURRENT_STOCK * 1.2f);  /* 0.00026 */
+    mpx_gain_set(MPX_FR_KNEE, MPX_PARAM_KP_CURRENT,  MPX_KP_CURRENT_STOCK  * 1.5f);
+    mpx_gain_set(MPX_FR_KNEE, MPX_PARAM_KFF_CURRENT, MPX_KFF_CURRENT_STOCK * 1.2f);
 
-    /* ...and the same two on all twelve, when you want the whole robot: */
-    mpx_current_all(MPX_KP_CURRENT_STOCK, MPX_KFF_CURRENT_STOCK);
+    /* ...and the same on all twelve, when you want the whole robot: */
+    mpx_gain_set(MPX_ALL_JOINTS, MPX_PARAM_KP_CURRENT, MPX_KP_CURRENT_STOCK);
 
-    /* Not a gain — a torque CEILING, which is why it is neither in
-     * mpx_gains_all nor in mpx_current_all. Bundling it would mean every
-     * stiffness change quietly reset a safety limit you set on purpose. */
-    mpx_max_effort (MPX_FR_KNEE, 0.6f);    /* 0..1 */
+    /* A torque CEILING rather than a gain, but the same one call reaches it.
+     * Clamped to 0..1 inside mpx_gain_set, so the limit holds whatever writes it. */
+    mpx_gain_set(MPX_FR_KNEE, MPX_PARAM_MAX_PWM_DUTY_CYCLE, 0.6f);
 
     /* Calibration, not gains. These decide what every angle MEANS, and
      * mpx_gain_save() would burn a mistake into the driver board's flash
@@ -93,15 +89,15 @@ MPX_EXPORT void on_start(void)
 
     /* ── B. Driving joints directly ──────────────────────────────────────
      * Same discipline as one layer up: stage what you want, send once.
-     * mpx_bus_stage() takes the same relative degrees as the rest of the
-     * SDK. (mpx_bus_stage_abs() takes the driver board's own 0..270 frame —
-     * it exists, but keeping one angle convention in your code is worth
-     * more than matching the wire.) */
+     * mpx_bus_move() does both in one call for a single joint. Staging is
+     * for FRAMES: several joints that should arrive together. Everything is
+     * relative degrees, +/-135 with 0 at centre — the same convention as the
+     * rest of the SDK, and now the only one. */
     for (int i = 0; i <= 60; ++i) {
         float deg = 12.0f * mpx_sind((float)i * 6.0f);
 
-        mpx_bus_stage(MPX_FR_SHOULDER, deg,  400.0f, 0.0f, 0.0f);
-        mpx_bus_stage(MPX_FR_KNEE,     0.0f, 400.0f, 0.0f, 0.0f);
+        mpx_bus_stage(MPX_FR_SHOULDER, deg);
+        mpx_bus_stage(MPX_FR_KNEE,     0.0f);
         mpx_bus_send();                     /* one transaction for the frame */
         mpx_sleep(16);
     }
@@ -114,7 +110,9 @@ MPX_EXPORT void on_start(void)
         float t    = (float)i / 40.0f;
         float soft = 90.0f - 60.0f * t;     /* stiff -> compliant */
 
-        mpx_bus_stage(MPX_FR_KNEE, -18.0f * t, 400.0f, soft, 900.0f);
+        /* _ex when the frame needs its own current cap or gains — here the
+           knee goes soft as it arrives, so it settles instead of slamming. */
+        mpx_bus_stage_ex(MPX_FR_KNEE, -18.0f * t, 400.0f, soft, 900.0f);
         mpx_bus_send();
         mpx_trace_f("kp", soft);
         mpx_sleep(20);
@@ -125,7 +123,7 @@ MPX_EXPORT void on_start(void)
      * built-in gait afterwards walks slightly wrong, and nothing on screen
      * explains why. */
     mpx_gains_stock();
-    mpx_max_effort_all(1.0f);          /* give the joints their authority back */
+    mpx_gain_set(MPX_ALL_JOINTS, MPX_PARAM_MAX_PWM_DUTY_CYCLE, 1.0f);
     mpx_bus_release();
 
     mpx_stand();

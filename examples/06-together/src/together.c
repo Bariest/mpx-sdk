@@ -22,7 +22,7 @@
  *   on             the firmware starts it when the robot is picked up
  *   params         tunable at run time, no rebuild
  *
- *     mpx-cli deploy examples/06-together
+ *     mpx-cli deploy examples/05-together
  *     mpx-cli movements            # "greet" is now in the list
  *     mpx-cli trace                # watch it level itself
  *     mpx-cli stop                 # the only way a behaviour ends
@@ -67,7 +67,8 @@ static void wave(void)
 static void be_pattable(int ms)
 {
     if (mpx_bus_take() != MPX_OK) return;
-    mpx_gains_all(18.0f, 600.0f);          /* soft */
+    mpx_gain_set(MPX_ALL_JOINTS, MPX_PARAM_KP_POSITION,  18.0f);   /* soft */
+    mpx_gain_set(MPX_ALL_JOINTS, MPX_PARAM_KD_POSITION, 600.0f);
     mpx_sleep(ms);
     mpx_gains_stock();                     /* ALWAYS put them back */
     mpx_bus_release();

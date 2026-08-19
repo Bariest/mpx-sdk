@@ -179,7 +179,12 @@ static inline void robot_apply_pose(robot_pose_t p)
 }
 
 /* ── Servo bus ───────────────────────────────────────────────────────────── */
-static inline int mpx_servo_set_all_gains(float kp, float kd) { return mpx_gains_all(kp, kd); }
+static inline int mpx_servo_set_all_gains(float kp, float kd)
+{
+    int rc = mpx_gain_set(MPX_ALL_JOINTS, MPX_PARAM_KP_POSITION, kp);
+    if (rc != MPX_OK) return rc;
+    return mpx_gain_set(MPX_ALL_JOINTS, MPX_PARAM_KD_POSITION, kd);
+}
 
 #ifdef __cplusplus
 }

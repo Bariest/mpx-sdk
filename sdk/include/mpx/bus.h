@@ -91,179 +91,122 @@ static inline int mpx_bus_held(void)    { return servo_is_locked(); }
 #define MPX_KP_CURRENT_STOCK    0.0006f   /* current P — note the scale       */
 #define MPX_KFF_CURRENT_STOCK   0.00022f  /* current feed-forward             */
 
+/** Pass instead of a joint to mean "all twelve".
+ *
+ *  This replaces an entire family. There used to be mpx_gains_all,
+ *  mpx_current_all, mpx_max_effort_all and mpx_bus_relax_all — four names, and
+ *  four chances to find that the one you wanted did not exist. One sentinel
+ *  covers all of them and every future one, and it reads at the call site as
+ *  what it is:
+ *
+ *      mpx_gain_set(MPX_ALL_JOINTS, MPX_PARAM_KP_POSITION, 65.0f);
+ *
+ *  Zero, because joints are 1..12 and zero was never a joint. */
+#define MPX_ALL_JOINTS ((mpx_joint_t)0)
+
+/** Set one parameter on one joint — or on all twelve with MPX_ALL_JOINTS.
+ *
+ *  THIS IS THE WHOLE GAIN API. There were five more functions wrapping it
+ *  (mpx_current_kp, mpx_current_kff, mpx_current_all, mpx_max_effort,
+ *  mpx_max_effort_all) and they earned their keep by naming things — except
+ *  mpx/params.h already names them, generated from the driver board's own
+ *  table, and MPX_PARAM_KP_CURRENT says which loop as well as which gain.
+ *  Five wrappers to learn, or one function and an enum you can autocomplete.
+ *
+ *  Max PWM duty is clamped to 0..1 here rather than in a wrapper, so the limit
+ *  holds no matter which path writes it.
+ *
+ *  Writes are slow — a driver-board config exchange, milliseconds each. Set
+ *  them once, outside your motion loop. Returns the first error, or MPX_OK. */
 static inline int mpx_gain_set(mpx_joint_t j, mpx_param_t p, float v)
 {
+    if (p == MPX_PARAM_MAX_PWM_DUTY_CYCLE) v = mpx_clamp(v, 0.0f, 1.0f);
+
+    if (j == MPX_ALL_JOINTS) {
+        for (int id = 1; id <= 12; ++id) {
+            int rc = servo_set_gain(id, (int)p, v);
+            if (rc != MPX_OK) return rc;
+        }
+        return MPX_OK;
+    }
     return servo_set_gain((int)j, (int)p, v);
 }
 
+/** Read one parameter back from one joint. Not valid with MPX_ALL_JOINTS —
+ *  twelve joints have twelve answers and one float to put them in. */
 static inline int mpx_gain_get(mpx_joint_t j, mpx_param_t p, float *out)
 {
+    if (!out || j == MPX_ALL_JOINTS) return MPX_ERR_ARG;
     return servo_get_gain((int)j, (int)p, out);
 }
 
-/** The same POSITION-loop gains on every joint. First error, or MPX_OK.
+/** Put every joint back to the factory control gains — all four, both loops.
  *
- *  Sets Kp and Kd only. Its partner is mpx_current_all() one section down;
- *  together they cover all four tuned gains, and mpx_gains_stock() puts all
- *  four back.
- *
- *  WHY THE TWO LOOPS ARE NOT ONE CALL. It is tempting to make this take all
- *  five numbers and be done. Then a call site reads
- *
- *      mpx_gains_all(65.0f, 800.0f, 0.0006f, 0.00022f, 1.0f);
- *
- *  — five unlabelled floats spanning five orders of magnitude, where swapping
- *  two of them is both catastrophic and invisible. That is not hypothetical:
- *  this SDK shipped mpx_current_kp(..., 40.0f), a position-loop number in a
- *  current-loop slot, roughly 66,000x too high. Splitting by loop keeps every
- *  argument list to numbers of the same magnitude, so a mistake is a mistake
- *  between neighbours rather than between 65 and 0.0006.
- *
- *  Max PWM duty is deliberately in neither: it is a torque CEILING, not a
- *  tuned gain. Bundling it here would mean every stiffness change silently
- *  reset a safety limit someone set on purpose. It has mpx_max_effort_all(). */
-static inline int mpx_gains_all(float kp, float kd)
-{
-    for (int id = 1; id <= 12; ++id) {
-        int rc = servo_set_gain(id, (int)MPX_PARAM_KP_POSITION, kp);
-        if (rc != MPX_OK) return rc;
-        rc = servo_set_gain(id, (int)MPX_PARAM_KD_POSITION, kd);
-        if (rc != MPX_OK) return rc;
-    }
-    return MPX_OK;
-}
-
-/** Put every joint back to the factory control gains — all FOUR of them, both
- *  loops. It restored only Kp/Kd once, which meant a skill that touched the
- *  current loop and then "put things back" left the robot mistuned in a way
- *  no amount of reading its own source explained. Defined below the current-
- *  loop helpers it depends on. */
-static inline int mpx_gains_stock(void);
-
-/* ── The rest of the servo's control loop ─────────────────────────────────
- *
- * Kp and Kd shape the POSITION loop: where the joint goes. Underneath it the
- * board runs a CURRENT loop, deciding how the motor produces the torque the
- * position loop asked for. These are the knobs for when a joint arrives in
- * the right place but arrives badly.
- * ═══════════════════════════════════════════════════════════════════════════ */
-
-/** Gain of the inner current loop. **Stock is 0.0006.**
- *
- *  How sharply the motor delivers the torque the position loop asked for.
- *  Raise it and the joint feels crisper; too far and it buzzes or sings,
- *  because the loop is now fast enough to chase its own noise.
- *
- *  MIND THE SCALE. This is not Kp position. The current loop works in amps
- *  per count, so its useful range is thousandths — 0.0004 to 0.002, moved in
- *  steps of 0.0001. A value that looks reasonable next to Kp 65 is four
- *  orders of magnitude too large and will make the joint scream. Use
- *  MPX_KP_CURRENT_STOCK as your reference point, not the position gains. */
-static inline int mpx_current_kp(mpx_joint_t j, float v)
-{
-    return mpx_gain_set(j, MPX_PARAM_KP_CURRENT, v);
-}
-
-/** Feed-forward current. **Stock is 0.00022.** Torque applied straight from
- *  the position error, without waiting for the loop to wind up.
- *
- *  This is the one for a joint that SAGS under a constant load, which on a
- *  quadruped means the robot's own weight. A pure Kp loop has to be off
- *  target to produce force, so it settles slightly low; feed-forward supplies
- *  that standing torque up front and the droop goes away.
- *
- *  Same scale as mpx_current_kp: ten-thousandths, stepped by 0.00001. */
-static inline int mpx_current_kff(mpx_joint_t j, float v)
-{
-    return mpx_gain_set(j, MPX_PARAM_KFF_CURRENT, v);
-}
-
-/** The same CURRENT-loop gains on every joint — the partner to
- *  mpx_gains_all(). First error, or MPX_OK.
- *
- *  Between the two you can set all four tuned gains on all twelve joints, and
- *  neither call ever contains a number from the other loop. Stock is
- *
- *      mpx_current_all(MPX_KP_CURRENT_STOCK, MPX_KFF_CURRENT_STOCK);
- *
- *  and scaling from those constants is safer than typing absolute values,
- *  because nothing about 0.0009 looks wrong next to 65. */
-static inline int mpx_current_all(float kp_current, float kff_current)
-{
-    for (int id = 1; id <= 12; ++id) {
-        int rc = servo_set_gain(id, (int)MPX_PARAM_KP_CURRENT, kp_current);
-        if (rc != MPX_OK) return rc;
-        rc = servo_set_gain(id, (int)MPX_PARAM_KFF_CURRENT, kff_current);
-        if (rc != MPX_OK) return rc;
-    }
-    return MPX_OK;
-}
-
-/** Ceiling on drive effort, 0..1 — your torque limit.
- *
- *  Lower it and the joint becomes physically unable to push hard, which is
- *  what you want while testing a new movement near furniture, or on a leg you
- *  do not yet trust. 1.0 is full authority. */
-static inline int mpx_max_effort(mpx_joint_t j, float duty_0_to_1)
-{
-    return mpx_gain_set(j, MPX_PARAM_MAX_PWM_DUTY_CYCLE,
-                        mpx_clamp(duty_0_to_1, 0.0f, 1.0f));
-}
-
-/** The same ceiling on all twelve joints. */
-static inline int mpx_max_effort_all(float duty_0_to_1)
-{
-    int worst = MPX_OK;
-    for (int id = 1; id <= 12; ++id) {
-        int rc = mpx_max_effort((mpx_joint_t)id, duty_0_to_1);
-        if (rc != MPX_OK) worst = rc;
-    }
-    return worst;
-}
-
-/* Declared above, next to mpx_gains_all(), where you go looking for it.
- * Deliberately both loops: restoring only half is worse than restoring none,
- * because it looks like you cleaned up. */
+ *  Keep this one call: it is the safety net, and a skill that restores only
+ *  half is worse than one that restores nothing, because it looks tidy. Call
+ *  it at the end of on_start AND in on_stop — gains live on the driver board
+ *  and outlive your skill. */
 static inline int mpx_gains_stock(void)
 {
-    int worst = mpx_gains_all(MPX_KP_STOCK, MPX_KD_STOCK);
-    int rc = mpx_current_all(MPX_KP_CURRENT_STOCK, MPX_KFF_CURRENT_STOCK);
+    int worst = MPX_OK, rc;
+    rc = mpx_gain_set(MPX_ALL_JOINTS, MPX_PARAM_KP_POSITION,  MPX_KP_STOCK);
+    if (rc != MPX_OK) worst = rc;
+    rc = mpx_gain_set(MPX_ALL_JOINTS, MPX_PARAM_KD_POSITION,  MPX_KD_STOCK);
+    if (rc != MPX_OK) worst = rc;
+    rc = mpx_gain_set(MPX_ALL_JOINTS, MPX_PARAM_KP_CURRENT,   MPX_KP_CURRENT_STOCK);
+    if (rc != MPX_OK) worst = rc;
+    rc = mpx_gain_set(MPX_ALL_JOINTS, MPX_PARAM_KFF_CURRENT,  MPX_KFF_CURRENT_STOCK);
     if (rc != MPX_OK) worst = rc;
     return worst;
 }
 
-/** Persist this joint's current gains to the driver board's flash. Survives a
- *  reboot — which is exactly why you should be sure first. */
+/** Persist this joint's gains to the driver board's flash. Survives a reboot —
+ *  which is exactly why you should be sure first. */
 static inline int mpx_gain_save(mpx_joint_t j)    { return servo_save_config((int)j); }
 /** Reload the joint's gains from its flash, discarding run-time changes. */
 static inline int mpx_gain_restore(mpx_joint_t j) { return servo_restore_config((int)j); }
 
 /* ═══════════════════════════════════════════════════════════════════════════
- *  Commands — the fast path
+ *  Moving
  *
- *  Stage the joints you want to move, then send once. Same discipline as
- *  mpx_frame_send() one layer up, and for the same reason: one bus
- *  transaction per frame rather than one per joint.
+ *  One joint: mpx_bus_move(). Several at once: stage them, then send.
+ *
+ *  The two-step exists because one bus transaction per FRAME is what keeps
+ *  motion smooth — sending per joint gives you a robot that judders. But that
+ *  is only true when you are moving several joints, and it used to be the
+ *  only option, so "move one joint" was a five-argument stage plus a separate
+ *  send that was easy to forget. Forgetting it fails silently: the joint is
+ *  queued and nothing is ever transmitted.
  * ═══════════════════════════════════════════════════════════════════════════ */
 
-/** Queue one joint.
+/** Move one joint and send it, in one call. Relative degrees, +/-135, 0 =
+ *  centre. Uses the gains already set and the board's own current limit.
  *
- *  @param abs_deg  ABSOLUTE degrees, 0..270, 135 = centre.
- *  @param tau_ma   Current cap for this move, mA. 0 uses the board's own.
- *  @param kp,kd    Per-frame gain override. 0,0 uses the gains already set,
- *                  which is what you want unless you are modulating stiffness
- *                  within a motion — landing softly, for instance.
- */
-static inline int mpx_bus_stage_abs(mpx_joint_t j, float abs_deg, float tau_ma,
-                                    float kp, float kd)
+ *  The call to reach for. Anything it cannot express is below. */
+static inline int mpx_bus_move(mpx_joint_t j, float deg)
 {
-    return servo_stage((int)j, abs_deg, tau_ma, kp, kd);
+    int rc = servo_stage((int)j, MPX_ABS_FROM_REL(deg), 0.0f, 0.0f, 0.0f);
+    if (rc != MPX_OK) return rc;
+    return servo_commit();
 }
 
-/** As mpx_bus_stage_abs(), taking the relative degrees the rest of the SDK
- *  uses. Prefer this one; it keeps a single angle convention in your code. */
-static inline int mpx_bus_stage(mpx_joint_t j, float deg, float tau_ma,
-                                float kp, float kd)
+/** Queue one joint for the next mpx_bus_send(). Relative degrees.
+ *
+ *  Nothing moves until you send. Stage every joint of the frame, then send
+ *  once. */
+static inline int mpx_bus_stage(mpx_joint_t j, float deg)
+{
+    return servo_stage((int)j, MPX_ABS_FROM_REL(deg), 0.0f, 0.0f, 0.0f);
+}
+
+/** mpx_bus_stage() with the per-frame overrides.
+ *
+ *  @param tau_ma  Current cap for this move, mA. 0 uses the board's own.
+ *  @param kp,kd   Per-frame gains. 0,0 uses the gains already set — which is
+ *                 what you want unless you are modulating stiffness WITHIN a
+ *                 motion, such as going compliant as a foot lands. */
+static inline int mpx_bus_stage_ex(mpx_joint_t j, float deg, float tau_ma,
+                                   float kp, float kd)
 {
     return servo_stage((int)j, MPX_ABS_FROM_REL(deg), tau_ma, kp, kd);
 }
@@ -271,22 +214,20 @@ static inline int mpx_bus_stage(mpx_joint_t j, float deg, float tau_ma,
 /** Send every staged joint in one bus transaction. */
 static inline int mpx_bus_send(void) { return servo_commit(); }
 
-/** Bypass the stage/send buffer for one joint. mode: 0 idle, 1 position,
- *  2 torque. Idle makes a joint go limp, which is how you check a leg by hand
- *  without fighting it. */
-static inline int mpx_bus_direct_abs(mpx_joint_t j, int mode, float abs_deg, float tau_ma)
+/** Let a joint go limp — or all of them with MPX_ALL_JOINTS.
+ *
+ *  How you check a leg by hand without fighting it. Relaxing all twelve sits
+ *  the robot down; hold it or expect it to drop. */
+static inline int mpx_bus_relax(mpx_joint_t j)
 {
-    return servo_direct((int)j, mode, abs_deg, tau_ma);
-}
-
-/** Let every joint go limp. Note that the robot will sit down. */
-static inline int mpx_bus_relax_all(void)
-{
-    for (int id = 1; id <= 12; ++id) {
-        int rc = servo_direct(id, 0, 0.0f, 0.0f);
-        if (rc != MPX_OK) return rc;
+    if (j == MPX_ALL_JOINTS) {
+        for (int id = 1; id <= 12; ++id) {
+            int rc = servo_direct(id, 0, 0.0f, 0.0f);
+            if (rc != MPX_OK) return rc;
+        }
+        return MPX_OK;
     }
-    return MPX_OK;
+    return servo_direct((int)j, 0, 0.0f, 0.0f);
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
