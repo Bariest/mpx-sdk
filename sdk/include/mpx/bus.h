@@ -123,11 +123,24 @@ static inline int mpx_gain_set(mpx_joint_t j, mpx_param_t p, float v)
     if (p == MPX_PARAM_MAX_PWM_DUTY_CYCLE) v = mpx_clamp(v, 0.0f, 1.0f);
 
     if (j == MPX_ALL_JOINTS) {
+        /* EVERY joint is attempted, and the worst result is reported.
+         *
+         * This returned on the first error once, which sounds careful and is
+         * the opposite. A driver board that has come unplugged fails on its
+         * first servo, so a robot with one bad board could not have ANY of its
+         * other nine joints tuned — the write died on joint 1 and the loop
+         * never reached the boards that were answering. "All twelve" has to
+         * mean it tried all twelve.
+         *
+         * The return value still tells you something went wrong; it just no
+         * longer decides that nothing else is worth doing. Read one back if
+         * you need to know which joints took it. */
+        int worst = MPX_OK;
         for (int id = 1; id <= 12; ++id) {
             int rc = servo_set_gain(id, (int)p, v);
-            if (rc != MPX_OK) return rc;
+            if (rc != MPX_OK) worst = rc;
         }
-        return MPX_OK;
+        return worst;
     }
     return servo_set_gain((int)j, (int)p, v);
 }
