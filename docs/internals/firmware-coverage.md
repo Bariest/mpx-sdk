@@ -57,10 +57,10 @@ Foot placement; the firmware solves the leg.
 
 | Firmware | Call it from a skill with | |
 |---|---|---|
-| `robot::front_right_ik()` | `mpx_foot_to()` · `mpx_feet_to()` · `mpx_stance_set()` |  |
-| `robot::front_left_ik()` | `mpx_foot_to()` · `mpx_feet_to()` · `mpx_stance_set()` |  |
-| `robot::rear_right_ik()` | `mpx_foot_to()` · `mpx_feet_to()` · `mpx_stance_set()` |  |
-| `robot::rear_left_ik()` | `mpx_foot_to()` · `mpx_feet_to()` · `mpx_stance_set()` |  |
+| `robot::front_right_ik()` | `mpx_foot_set()` · `mpx_feet_set()` · `mpx_stance_set()` |  |
+| `robot::front_left_ik()` | `mpx_foot_set()` · `mpx_feet_set()` · `mpx_stance_set()` |  |
+| `robot::rear_right_ik()` | `mpx_foot_set()` · `mpx_feet_set()` · `mpx_stance_set()` |  |
+| `robot::rear_left_ik()` | `mpx_foot_set()` · `mpx_feet_set()` · `mpx_stance_set()` |  |
 
 ### Overlay
 
@@ -78,7 +78,7 @@ Direct joint angles; you solve the leg.
 
 | Firmware | Call it from a skill with | |
 |---|---|---|
-| `robot::set_servo_angle()` | `mpx_joint_to()` · `mpx_pose_set()` |  |
+| `robot::set_servo_angle()` | `mpx_joint_set()` · `mpx_pose_set()` |  |
 | `robot::flush()` | `mpx_frame_send()` · `mpx_pose_apply()` · `mpx_stance_apply()` |  |
 
 ### Servo bus
@@ -98,7 +98,7 @@ Reading the robot back.
 | Firmware | Call it from a skill with | |
 |---|---|---|
 | `robot::read_angle_cdeg()` | `mpx_joint_at()` |  |
-| `robot::read_position()` | `robot_read_position()` | Raw 0-1023 in the ABSOLUTE frame. Deliberately has no mpx_ wrapper: mpx_joint_at() is the reading that matches mpx_joint_to(), and a wrapper next to it invited loops built across the two frames. Reachable as robot_read_position() from mpx/abi.h for diagnostics. |
+| `robot::read_position()` | `robot_read_position()` | Raw 0-1023 in the ABSOLUTE frame. Deliberately has no mpx_ wrapper: mpx_joint_at() is the reading that matches mpx_joint_set(), and a wrapper next to it invited loops built across the two frames. Reachable as robot_read_position() from mpx/abi.h for diagnostics. |
 | `robot::read_speed()` | `robot_read_speed()` |  |
 | `robot::read_load()` | `robot_read_load()` |  |
 | `robot::read_voltage()` | `robot_read_voltage()` |  |
@@ -122,9 +122,9 @@ Per-joint zero offsets.
 
 ## Withheld on purpose
 
-**`robot::set_servo_speed()`** — Dead in the firmware. The driver boards' SPI frame has no speed field — robot::flush() builds it from position plus a fixed current cap and never reads goal_speed. The SDK used to wrap this as mpx_joint_speed(); it returned MPX_OK and changed nothing, which is worse than not existing. Move a joint at a chosen speed by stepping mpx_joint_to() on a ticker.
+**`robot::set_servo_speed()`** — Dead in the firmware. The driver boards' SPI frame has no speed field — robot::flush() builds it from position plus a fixed current cap and never reads goal_speed. The SDK used to wrap this as mpx_joint_speed(); it returned MPX_OK and changed nothing, which is worse than not existing. Move a joint at a chosen speed by stepping mpx_joint_set() on a ticker.
 
-**`robot::set_all_servo_speed()`** — Dead in the firmware. The driver boards' SPI frame has no speed field — robot::flush() builds it from position plus a fixed current cap and never reads goal_speed. The SDK used to wrap this as mpx_joint_speed(); it returned MPX_OK and changed nothing, which is worse than not existing. Move a joint at a chosen speed by stepping mpx_joint_to() on a ticker.
+**`robot::set_all_servo_speed()`** — Dead in the firmware. The driver boards' SPI frame has no speed field — robot::flush() builds it from position plus a fixed current cap and never reads goal_speed. The SDK used to wrap this as mpx_joint_speed(); it returned MPX_OK and changed nothing, which is worse than not existing. Move a joint at a chosen speed by stepping mpx_joint_set() on a ticker.
 
 **`robot::set_studio_mode()`** — Servo Studio is the human-in-the-loop calibration tool. A skill silently putting the robot into Studio mode would take the bus away from a person who is watching a joint move. Use the robot's web UI.
 

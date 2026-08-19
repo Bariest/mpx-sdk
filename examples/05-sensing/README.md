@@ -73,10 +73,10 @@ and one that feels like a machine.
 
 ```c
 float error = target - mpx_joint_at(MPX_FR_KNEE);
-mpx_joint_to(MPX_FR_KNEE, target + error * 0.25f);
+mpx_joint_set(MPX_FR_KNEE, target + error * 0.25f);
 ```
 
-**`mpx_joint_at()` reads back in the same frame `mpx_joint_to()` writes.** There
+**`mpx_joint_at()` reads back in the same frame `mpx_joint_set()` writes.** There
 is a raw reading underneath (`mpx_joint_raw()`) that runs the *opposite* way — a
 loop built on it makes the error term the wrong sign and diverges instead of
 converging, silently and at speed. This is the single easiest way to hurt a

@@ -24,8 +24,8 @@ model, or a loop closed on measured angles.
 **Nothing moves until `mpx_frame_send()`.**
 
 ```c
-mpx_joint_to(MPX_FR_SHOULDER, 20.0f);
-mpx_joint_to(MPX_FR_KNEE,    -25.0f);
+mpx_joint_set(MPX_FR_SHOULDER, 20.0f);
+mpx_joint_set(MPX_FR_KNEE,    -25.0f);
 mpx_frame_send();                       /* ← once per frame, not per joint */
 ```
 
@@ -63,10 +63,10 @@ mpx_ik2(x_mm, z_mm, &shoulder, &knee);
 ```c
 float measured = mpx_joint_at(MPX_FR_KNEE);     /* same frame as _to() */
 float error    = target - measured;
-mpx_joint_to(MPX_FR_KNEE, target + error * 0.25f);
+mpx_joint_set(MPX_FR_KNEE, target + error * 0.25f);
 ```
 
-`mpx_joint_at()` reads back in the **same frame** `mpx_joint_to()` writes.
+`mpx_joint_at()` reads back in the **same frame** `mpx_joint_set()` writes.
 There is a raw reading underneath (`mpx_joint_raw()`) that runs the *opposite*
 way — a loop built on that one makes the error term the wrong sign and diverges
 instead of converging, silently and at speed.

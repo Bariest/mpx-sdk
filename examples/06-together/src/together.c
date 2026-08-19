@@ -54,8 +54,8 @@ static void wave(void)
 {
     mpx_take(MPX_OWN_JOINTS);
     for (int i = 0; i <= 70; ++i) {
-        mpx_joint_to(MPX_FR_SHOULDER, 45.0f);
-        mpx_joint_to(MPX_FR_KNEE,    -30.0f + 18.0f * mpx_sind((float)i * 18.0f));
+        mpx_joint_set(MPX_FR_SHOULDER, 45.0f);
+        mpx_joint_set(MPX_FR_KNEE,    -30.0f + 18.0f * mpx_sind((float)i * 18.0f));
         mpx_frame_send();
         mpx_sleep(20);
     }

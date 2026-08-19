@@ -135,12 +135,21 @@ static inline void robot_attitude_speed_xyz(float r, float p, float y)
 static inline void robot_attitude_at(float r, float p, float y, float dps)
                                                    { mpx_body_speed((int)dps); mpx_body(r, p, y); }
 
+/* ── Renamed in the _set/_apply/_move cleanup ─────────────────────────────
+   mpx_joint_to/mpx_foot_to/mpx_feet_to read as if they moved something. They
+   stage a frame; mpx_frame_send() moves it. Renamed to _set to say so. */
+static inline int mpx_joint_to(mpx_joint_t j, float deg) { return mpx_joint_set(j, deg); }
+static inline int mpx_foot_to (mpx_leg_t leg, float x, float splay, float z)
+                                                { return mpx_foot_set(leg, x, splay, z); }
+static inline int mpx_feet_to (float x, float splay, float z)
+                                                { return mpx_feet_set(x, splay, z); }
+
 /* ── Joints ──────────────────────────────────────────────────────────────── */
-static inline int  robot_set_servo_deg(mpx_joint_t j, float deg) { return mpx_joint_to(j, deg); }
+static inline int  robot_set_servo_deg(mpx_joint_t j, float deg) { return mpx_joint_set(j, deg); }
 /* `speed` is accepted and ignored: the driver boards have no speed field and
    the firmware never sent this value anywhere. See the note in mpx/leg.h. */
 static inline void robot_set_servo(mpx_joint_t j, float deg, int speed)
-                                                   { (void)speed; mpx_joint_to(j, deg); }
+                                                   { (void)speed; mpx_joint_set(j, deg); }
 
 /* ── Config ──────────────────────────────────────────────────────────────── */
 typedef struct { int period, height, up_height, stride, tilt; } robot_config_t;

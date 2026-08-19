@@ -9,9 +9,9 @@
  *
  *     mpx-cli deploy examples/03-joints
  *
- *     Based on:  mpx/leg.h    (mpx_joint_to, mpx_frame_send)
+ *     Based on:  mpx/leg.h    (mpx_joint_set, mpx_frame_send)
  *                mpx/math.h   (there is no libm in the sandbox)
- *                mpx/leg.h    (mpx_joint_move — mpx_joint_to plus a speed)
+ *                mpx/leg.h    (mpx_joint_move — mpx_joint_set plus a speed)
  *                mpx/motion.h (poses, when joints must move together)
  */
 #include "mpx.h"
@@ -42,8 +42,8 @@ MPX_EXPORT void on_start(void)
      * NOTHING MOVES until mpx_frame_send(). Set every joint you want for
      * this frame, then send ONCE. Sending per joint gives you a robot that
      * judders, because each send is a separate bus transaction. */
-    mpx_joint_to(MPX_FR_SHOULDER, 20.0f);
-    mpx_joint_to(MPX_FR_KNEE,    -25.0f);
+    mpx_joint_set(MPX_FR_SHOULDER, 20.0f);
+    mpx_joint_set(MPX_FR_KNEE,    -25.0f);
     mpx_frame_send();                       /* ← once per frame */
     mpx_sleep(700);
 
@@ -63,15 +63,15 @@ MPX_EXPORT void on_start(void)
         float shoulder, knee;
         mpx_ik2(x, z, &shoulder, &knee);                 /* -> degrees    */
 
-        mpx_joint_to(MPX_FR_SHOULDER, shoulder);
-        mpx_joint_to(MPX_FR_KNEE,     knee);
+        mpx_joint_set(MPX_FR_SHOULDER, shoulder);
+        mpx_joint_set(MPX_FR_KNEE,     knee);
         mpx_frame_send();
         mpx_sleep(16);                                   /* ~60 fps       */
     }
 
     /* ── C. Closing a loop ───────────────────────────────────────────────
      * mpx_joint_at() reads the MEASURED angle in the SAME frame
-     * mpx_joint_to() takes. That matters: the raw reading underneath runs
+     * mpx_joint_set() takes. That matters: the raw reading underneath runs
      * the opposite way, and a loop built on it diverges instead of
      * converging — silently, and at speed. */
     float target = -20.0f;
@@ -79,7 +79,7 @@ MPX_EXPORT void on_start(void)
         float measured = mpx_joint_at(MPX_FR_KNEE);
         float error    = target - measured;
 
-        mpx_joint_to(MPX_FR_KNEE, target + error * 0.25f);   /* gentle P term */
+        mpx_joint_set(MPX_FR_KNEE, target + error * 0.25f);   /* gentle P term */
         mpx_frame_send();
 
         mpx_trace_f("error", error);        /* mpx-cli trace, to watch it settle */
@@ -91,10 +91,10 @@ MPX_EXPORT void on_start(void)
      * That IS speed here. THERE IS NO SPEED REGISTER — the frame to the driver
      * boards carries { mode, position, torque, kp, kd } and nothing else, so a
      * joint always drives as hard as its position loop asks. A bare
-     * mpx_joint_to() is always full speed: the whole error appears at once and
+     * mpx_joint_set() is always full speed: the whole error appears at once and
      * the motor spends everything closing it.
      *
-     * mpx_joint_move() is mpx_joint_to() with the speed you want. It reads
+     * mpx_joint_move() is mpx_joint_set() with the speed you want. It reads
      * where the joint actually is, works out the time, runs the loop, and
      * sends its own frames — so it replaces a loop, it does not go inside one. */
     mpx_joint_move(MPX_FR_KNEE, -25.0f, 60.0f);   /* 60 deg/s */

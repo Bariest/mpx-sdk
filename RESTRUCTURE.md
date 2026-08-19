@@ -363,13 +363,13 @@ will be removed after one release.
 | `robot_walk_forward(ms)` | `mpx_gait_for(MPX_GAIT_FORWARD, ms)` |
 | `robot_look_upper_left(ms)` *(and 44 more)* | `mpx_gait_for(MPX_GAIT_LOOK_UP_LEFT, ms)` |
 | `robot_stand()` | `mpx_stand()` |
-| `robot_set_servo_angle(id, cdeg)` | `mpx_joint_to(joint, deg)` — **degrees, not centidegrees** |
-| `robot_set_servo_deg(id, deg)` | `mpx_joint_to(joint, deg)` |
+| `robot_set_servo_angle(id, cdeg)` | `mpx_joint_set(joint, deg)` — **degrees, not centidegrees** |
+| `robot_set_servo_deg(id, deg)` | `mpx_joint_set(joint, deg)` |
 | `robot_read_angle_cdeg(id)` | `mpx_joint_at(joint)` — degrees |
 | `robot_read_position(id)` | `mpx_joint_raw(joint)` — still absolute, still diagnostics only |
 | `robot_flush()` | `mpx_frame_send()`, or let `mpx_ticker_wait()` do it |
 | `robot_delay_ms(ms)` | `mpx_sleep(ms)`; prefer `mpx_sleep_to()` in a loop |
-| `robot_ik_fr(x, t, z)` | `mpx_foot_to(MPX_FR, x, t, z)` |
+| `robot_ik_fr(x, t, z)` | `mpx_foot_set(MPX_FR, x, t, z)` |
 | `robot_set_body_pose(r, p, y)` | `mpx_body(r, p, y)` |
 | `robot_set_attitude_speed(d)` | `mpx_body_speed(d)` |
 | `robot_set_config(a,b,c,d,e)` | `mpx_gait_config_set(cfg)` |
@@ -381,7 +381,7 @@ will be removed after one release.
 | `GAIT_ADVANCE` | `MPX_GAIT_FORWARD` |
 | `MPX_OK`, `MPX_ERR_*` | unchanged, plus `MPX_ERR_BUSY` (−7) |
 
-**The one to be careful with:** `mpx_joint_to()` takes **degrees**, where
+**The one to be careful with:** `mpx_joint_set()` takes **degrees**, where
 `robot_set_servo_angle()` took centidegrees. A mechanical find-and-replace
 gives you angles 100× too small. `mpx_compat.h` keeps the old function with the
 old units, so port that call site deliberately.

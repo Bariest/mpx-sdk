@@ -126,8 +126,8 @@
     "front_right_ik": {
       "status": "exposed",
       "sdk": [
-        "mpx_foot_to",
-        "mpx_feet_to",
+        "mpx_foot_set",
+        "mpx_feet_set",
         "mpx_stance_set"
       ],
       "abi": [
@@ -139,8 +139,8 @@
     "front_left_ik": {
       "status": "exposed",
       "sdk": [
-        "mpx_foot_to",
-        "mpx_feet_to",
+        "mpx_foot_set",
+        "mpx_feet_set",
         "mpx_stance_set"
       ],
       "abi": [
@@ -152,8 +152,8 @@
     "rear_right_ik": {
       "status": "exposed",
       "sdk": [
-        "mpx_foot_to",
-        "mpx_feet_to",
+        "mpx_foot_set",
+        "mpx_feet_set",
         "mpx_stance_set"
       ],
       "abi": [
@@ -165,8 +165,8 @@
     "rear_left_ik": {
       "status": "exposed",
       "sdk": [
-        "mpx_foot_to",
-        "mpx_feet_to",
+        "mpx_foot_set",
+        "mpx_feet_set",
         "mpx_stance_set"
       ],
       "abi": [
@@ -178,7 +178,7 @@
     "set_servo_angle": {
       "status": "exposed",
       "sdk": [
-        "mpx_joint_to",
+        "mpx_joint_set",
         "mpx_pose_set"
       ],
       "abi": [
@@ -192,7 +192,7 @@
         "robot_set_servo_speed"
       ],
       "area": "joints",
-      "why": "Dead in the firmware. The driver boards' SPI frame has no speed field — robot::flush() builds it from position plus a fixed current cap and never reads goal_speed. The SDK used to wrap this as mpx_joint_speed(); it returned MPX_OK and changed nothing, which is worse than not existing. Move a joint at a chosen speed by stepping mpx_joint_to() on a ticker."
+      "why": "Dead in the firmware. The driver boards' SPI frame has no speed field — robot::flush() builds it from position plus a fixed current cap and never reads goal_speed. The SDK used to wrap this as mpx_joint_speed(); it returned MPX_OK and changed nothing, which is worse than not existing. Move a joint at a chosen speed by stepping mpx_joint_set() on a ticker."
     },
     "set_all_servo_speed": {
       "status": "withheld",
@@ -200,7 +200,7 @@
         "mpx_set_all_servo_speed"
       ],
       "area": "joints",
-      "why": "Dead in the firmware. The driver boards' SPI frame has no speed field — robot::flush() builds it from position plus a fixed current cap and never reads goal_speed. The SDK used to wrap this as mpx_joint_speed(); it returned MPX_OK and changed nothing, which is worse than not existing. Move a joint at a chosen speed by stepping mpx_joint_to() on a ticker."
+      "why": "Dead in the firmware. The driver boards' SPI frame has no speed field — robot::flush() builds it from position plus a fixed current cap and never reads goal_speed. The SDK used to wrap this as mpx_joint_speed(); it returned MPX_OK and changed nothing, which is worse than not existing. Move a joint at a chosen speed by stepping mpx_joint_set() on a ticker."
     },
     "flush": {
       "status": "exposed",
@@ -231,7 +231,7 @@
         "robot_read_position"
       ],
       "area": "sensing",
-      "note": "Raw 0-1023 in the ABSOLUTE frame. Deliberately has no mpx_ wrapper: mpx_joint_at() is the reading that matches mpx_joint_to(), and a wrapper next to it invited loops built across the two frames. Reachable as robot_read_position() from mpx/abi.h for diagnostics."
+      "note": "Raw 0-1023 in the ABSOLUTE frame. Deliberately has no mpx_ wrapper: mpx_joint_at() is the reading that matches mpx_joint_set(), and a wrapper next to it invited loops built across the two frames. Reachable as robot_read_position() from mpx/abi.h for diagnostics."
     },
     "read_speed": {
       "status": "exposed",

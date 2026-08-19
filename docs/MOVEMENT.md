@@ -83,20 +83,20 @@ z. About −70 mm is standing.
 There is no speed register. The driver boards' SPI frame carries
 `{ mode, position, torque, kp, kd }` and nothing else — `robot::flush()` builds
 it from a position plus a fixed current cap. A joint always drives as hard as
-its position loop asks, so a plain `mpx_joint_to()` or `mpx_foot_to()` is
+its position loop asks, so a plain `mpx_joint_set()` or `mpx_foot_set()` is
 *always* full speed: it creates the whole error at once.
 
 A slower move is the same command fed in gradually. Every `_to` has a `_move`
 that does exactly that, with one extra argument:
 
 ```c
-mpx_foot_to  (MPX_FR, 30.0f, 0.0f, -50.0f);          /* now          */
+mpx_foot_set  (MPX_FR, 30.0f, 0.0f, -50.0f);          /* now          */
 mpx_foot_move(MPX_FR, 30.0f, 0.0f, -50.0f, 40.0f);   /* at 40 mm/s   */
 
-mpx_feet_to  (0.0f, 0.0f, -52.0f);                   /* now          */
+mpx_feet_set  (0.0f, 0.0f, -52.0f);                   /* now          */
 mpx_feet_move(0.0f, 0.0f, -52.0f, 40.0f);            /* at 40 mm/s   */
 
-mpx_joint_to  (MPX_FR_KNEE, -25.0f);                 /* now (+ send) */
+mpx_joint_set  (MPX_FR_KNEE, -25.0f);                 /* now (+ send) */
 mpx_joint_move(MPX_FR_KNEE, -25.0f, 60.0f);          /* at 60 deg/s  */
 ```
 
@@ -141,7 +141,7 @@ still moves, it just lands somewhere else.
 MPX_FR  MPX_FL  MPX_RR  MPX_RL           /* front/rear, right/left */
 MPX_HIP  MPX_SHOULDER  MPX_KNEE          /* hip outwards           */
 
-mpx_joint_to(MPX_FR_KNEE, -8.0f);        /* name one directly      */
+mpx_joint_set(MPX_FR_KNEE, -8.0f);        /* name one directly      */
 mpx_joint(MPX_FL, MPX_KNEE)              /* or compose, for loops  */
 ```
 
@@ -151,8 +151,8 @@ mpx_joint(MPX_FL, MPX_KNEE)              /* or compose, for loops  */
 ## Nothing moves until you send the frame
 
 ```c
-mpx_joint_to(MPX_FR_SHOULDER, 12.0f);
-mpx_joint_to(MPX_FR_KNEE,     -8.0f);
+mpx_joint_set(MPX_FR_SHOULDER, 12.0f);
+mpx_joint_set(MPX_FR_KNEE,     -8.0f);
 mpx_frame_send();                    /* ← once per frame, not per joint */
 ```
 
@@ -172,8 +172,8 @@ control and takes more responsibility.
 | use a movement the robot has | `mpx_gait(MPX_GAIT_FORWARD)` |
 | steer continuously | `mpx_drive_mm_s(40, 0, 15)` |
 | **choreograph a shape over time** | **`mpx_stance_play()`** |
-| place feet, let the robot solve the leg | `mpx_foot_to(MPX_FR, x, splay, z)` |
-| set joint angles myself | `mpx_joint_to(MPX_FR_KNEE, deg)` |
+| place feet, let the robot solve the leg | `mpx_foot_set(MPX_FR, x, splay, z)` |
+| set joint angles myself | `mpx_joint_set(MPX_FR_KNEE, deg)` |
 | own the motor's control loop | `mpx_bus_take()` |
 
 **Most new movements are timelines.** If you are writing a `for` loop full of
@@ -277,7 +277,7 @@ mpx_joint_at(MPX_FR_KNEE);            /* measured angle, degrees   */
 ```
 
 **Close loops on `mpx_joint_at()`.** It is in the same frame as
-`mpx_joint_to()`. `robot_read_position()` in mpx/abi.h is the opposite frame, and a loop
+`mpx_joint_set()`. `robot_read_position()` in mpx/abi.h is the opposite frame, and a loop
 built on it diverges instead of converging.
 
 ## Giving it a name the robot knows
@@ -466,8 +466,8 @@ mpx_stand();
 mpx_stand();
 mpx_take(MPX_OWN_JOINTS);
 for (int i = 0; i < 60; ++i) {
-    mpx_joint_to(MPX_FR_SHOULDER, 40.0f);
-    mpx_joint_to(MPX_FR_KNEE, -30.0f + 15.0f * mpx_sind(i * 24.0f));
+    mpx_joint_set(MPX_FR_SHOULDER, 40.0f);
+    mpx_joint_set(MPX_FR_KNEE, -30.0f + 15.0f * mpx_sind(i * 24.0f));
     mpx_frame_send();
     mpx_sleep(20);
 }
@@ -479,7 +479,7 @@ mpx_stand();
 ```c
 for (int i = 0; i < 90; ++i) {
     float sway = 18.0f * mpx_sind(i * 4.0f);
-    mpx_feet_to(sway, 0.0f, MPX_STAND_Z_MM);
+    mpx_feet_set(sway, 0.0f, MPX_STAND_Z_MM);
     mpx_sleep(20);
 }
 ```

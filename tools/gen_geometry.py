@@ -101,7 +101,7 @@ def render(vals: dict[str, str]) -> str:
 {body}
 
 /** Furthest a foot can be from its hip. Beyond this the leg is straight and
- *  the IK has no solution — {{@link mpx_foot_to}} clamps rather than failing. */
+ *  the IK has no solution — {{@link mpx_foot_set}} clamps rather than failing. */
 #define MPX_REACH_MM      (MPX_THIGH_MM + MPX_CALF_MM)
 
 /** A safe, normal standing foot height. Negative because z is up. */

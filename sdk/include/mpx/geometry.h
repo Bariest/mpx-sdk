@@ -34,7 +34,7 @@
 #define MPX_GAIT_DT_S     0.015f   /**< s    One tick of the gait generator.                            (SG_DT) */
 
 /** Furthest a foot can be from its hip. Beyond this the leg is straight and
- *  the IK has no solution — {@link mpx_foot_to} clamps rather than failing. */
+ *  the IK has no solution — {@link mpx_foot_set} clamps rather than failing. */
 #define MPX_REACH_MM      (MPX_THIGH_MM + MPX_CALF_MM)
 
 /** A safe, normal standing foot height. Negative because z is up. */

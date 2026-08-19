@@ -9,7 +9,7 @@
  *
  *     mpx-cli deploy examples/02-feet
  *
- *     Based on:  mpx/leg.h       (mpx_foot_to, mpx_frame_send)
+ *     Based on:  mpx/leg.h       (mpx_foot_set, mpx_frame_send)
  *                mpx/geometry.h  (the robot's real dimensions)
  *                mpx/leg.h       (mpx_foot_move, mpx_feet_move — same calls,
  *                                 plus a speed)
@@ -34,15 +34,30 @@ MPX_EXPORT void on_start(void)
     const float STAND = MPX_STAND_Z_MM;     /* -70, from the firmware's own model */
 
     /* ── A. One pose ─────────────────────────────────────────────────────
-     * All four feet in the same place relative to their own hips. */
-    mpx_feet_to(0.0f, 0.0f, STAND);
+     * All four feet in the same place relative to their own hips.
+     *
+     * NOTHING MOVES UNTIL mpx_frame_send(). mpx_feet_set() only writes the
+     * twelve joint targets into a buffer; sending is a separate step so a
+     * whole frame leaves as ONE bus transaction instead of twelve.
+     *
+     * This is not optional and it is not "cleaner if you do". While your skill
+     * runs, the firmware's gait task keeps rewriting that same buffer with the
+     * neutral stand every 15 ms. Set feet without sending and your numbers are
+     * overwritten before they ever reach a motor — no error, no warning, a
+     * robot that just stands there.
+     *
+     * mpx_foot_move()/mpx_feet_move() (section E) and mpx_ticker_wait() send
+     * for you, which is why they do not appear next to those. */
+    mpx_feet_set(0.0f, 0.0f, STAND);
+    mpx_frame_send();               /* ← NOTHING MOVES UNTIL YOU SEND */
     mpx_sleep(600);
 
     /* ── B. Crouch and rise ──────────────────────────────────────────────
      * Less negative z is a crouch: the foot is closer to the hip. */
     for (int i = 0; i <= 40; ++i) {
         float z = STAND + 18.0f * mpx_sind((float)i * 4.5f);   /* 0..180 deg */
-        mpx_feet_to(0.0f, 0.0f, z);
+        mpx_feet_set(0.0f, 0.0f, z);
+        mpx_frame_send();
         mpx_sleep(25);
     }
 
@@ -51,21 +66,24 @@ MPX_EXPORT void on_start(void)
      * The robot rides over its feet without stepping. */
     for (int i = 0; i < 90; ++i) {
         float sway = 18.0f * mpx_sind((float)i * 4.0f);
-        mpx_feet_to(sway, 0.0f, STAND);
+        mpx_feet_set(sway, 0.0f, STAND);
+        mpx_frame_send();
         mpx_sleep(20);
     }
 
     /* ── D. One leg at a time ────────────────────────────────────────────
      * Plant three, lift the fourth. Lift a leg the robot is standing on and
      * it will fall over — that is the responsibility this layer hands you. */
-    mpx_feet_to(0.0f, 0.0f, STAND);
+    mpx_feet_set(0.0f, 0.0f, STAND);
+    mpx_frame_send();
     mpx_sleep(400);
 
     for (int i = 0; i <= 60; ++i) {
         float t     = (float)i / 60.0f;
         float lift  = 25.0f * mpx_sind(t * 180.0f);     /* up and back down  */
         float reach = 20.0f * mpx_sind(t * 360.0f);     /* forward and back  */
-        mpx_foot_to(MPX_FR, reach, 0.0f, STAND + lift);
+        mpx_foot_set(MPX_FR, reach, 0.0f, STAND + lift);
+        mpx_frame_send();
         mpx_sleep(20);
     }
 
@@ -74,7 +92,7 @@ MPX_EXPORT void on_start(void)
      * the next z. That IS speed on this robot. THERE IS NO SPEED REGISTER —
      * the driver boards take a position and a current cap and have no speed
      * field, so a joint always drives as hard as its position loop asks. A
-     * plain mpx_foot_to() is therefore always full speed: it creates the whole
+     * plain mpx_foot_set() is therefore always full speed: it creates the whole
      * error at once. Slower means feeding the target in gradually.
      *
      * Which is what those loops were doing by hand — so the SDK does it for
@@ -89,7 +107,7 @@ MPX_EXPORT void on_start(void)
 
     /* mm/s is real: 36 mm of travel at 40 mm/s takes about 900 ms, and the
      * SAME call with 80.0f takes half as long. Pass 0 to mean "as fast as it
-     * goes", which is exactly mpx_foot_to().
+     * goes", which is exactly mpx_foot_set().
      *
      * With four feet the speed applies to whichever travels FURTHEST and the
      * rest are slowed to match, so the pose lands in one piece. Per-foot speed
@@ -100,6 +118,7 @@ MPX_EXPORT void on_start(void)
      * or your own easing, mpx/motion.h works in times instead of speeds. */
 
     mpx_feet_stand();
+    mpx_frame_send();
     MPX_LOG("done");
 }
 

@@ -78,7 +78,7 @@ extern int robot_delay_ms(int ms);
 /* ── v1/v2: per-leg inverse kinematics ─────────────────────────────────────
  * RAW FIRMWARE CONVENTION: z here is DISTANCE DOWN from the hip, POSITIVE.
  * Standing is z = +70. This is the opposite of the SDK's z, which is
- * up-positive; mpx_foot_to() in mpx/leg.h converts for you. Reaching past it
+ * up-positive; mpx_foot_set() in mpx/leg.h converts for you. Reaching past it
  * to these means you are opting out of that. */
 extern int robot_ik_fr(float x, float th0, float z);
 extern int robot_ik_fl(float x, float th0, float z);
@@ -123,7 +123,7 @@ extern int mpx_get_walk_speed(void);
 
 /* ── v3: foot placement ────────────────────────────────────────────────────
  * Same raw convention as the robot_ik_* group above: z is distance DOWN,
- * positive. Prefer mpx_foot_to() from mpx/leg.h. */
+ * positive. Prefer mpx_foot_set() from mpx/leg.h. */
 extern int mpx_foot(int leg, float x, float th0, float z);
 
 /* ── v3: capabilities that existed in the firmware but not in the ABI ────── */

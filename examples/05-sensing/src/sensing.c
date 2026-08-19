@@ -88,7 +88,7 @@ MPX_EXPORT void on_start(void)
         else            yield *= 0.90f;
         yield = mpx_clamp(yield, 0.0f, 25.0f);
 
-        mpx_joint_to(MPX_FR_SHOULDER, yield);
+        mpx_joint_set(MPX_FR_SHOULDER, yield);
         mpx_frame_send();
 
         mpx_trace_i("load",  load);
@@ -99,7 +99,7 @@ MPX_EXPORT void on_start(void)
     mpx_stand();
 
     /* ── D. Closing a loop, correctly ────────────────────────────────────
-     * mpx_joint_at() reads back in the SAME frame mpx_joint_to() writes, so
+     * mpx_joint_at() reads back in the SAME frame mpx_joint_set() writes, so
      * the error term below has the right sign. The driver board's own raw
      * reading runs the OPPOSITE way; the SDK used to wrap it one line away
      * from this one, which made "diverges instead of converging, silently and
@@ -111,7 +111,7 @@ MPX_EXPORT void on_start(void)
     const float target = -20.0f;
     for (int i = 0; i < 30; ++i) {
         float error = target - mpx_joint_at(MPX_FR_KNEE);
-        mpx_joint_to(MPX_FR_KNEE, target + error * 0.25f);
+        mpx_joint_set(MPX_FR_KNEE, target + error * 0.25f);
         mpx_frame_send();
         mpx_trace_f("error", error);
         mpx_sleep(40);
