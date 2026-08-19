@@ -72,25 +72,23 @@ MPX_EXPORT void on_start(void)
      * Clamped to 0..1 inside mpx_gain_set, so the limit holds whatever writes it. */
     mpx_gain_set(MPX_FR_KNEE, MPX_PARAM_MAX_PWM_DUTY_CYCLE, 0.6f);
 
-    /* Calibration, not gains. These decide what every angle MEANS, and
-     * mpx_gain_save() would burn a mistake into the driver board's flash
-     * where a reboot will not clear it. Refused from a skill on purpose —
-     * change them from Servo Studio, watching the joint move. */
-    if (mpx_gain_set(MPX_FR_KNEE, MPX_PARAM_RANGE_POSITION_DEG, 300.0f)
-            == MPX_ERR_READONLY)
-        MPX_LOG("calibration params are read-only from a skill, as intended");
-
-    /* The two REVERSE_* slots flip a direction. A skill that writes one leaves
-     * a single joint driving opposite to the other eleven — a robot tearing at
-     * its own legs, surviving the skill that caused it. The firmware refuses
-     * them for that reason. */
-    if (mpx_gain_set(MPX_FR_KNEE, MPX_PARAM_REVERSE_MOTOR, 1.0f) == MPX_ERR_READONLY)
-        MPX_LOG("reverse_motor is refused too — it is a direction, not a gain");
-
-    /* You never have to find out the hard way. Ask first: */
-    for (int i = 0; i < MPX_PARAM_COUNT; ++i)
-        if (MPX_PARAMS[i].read_only)
-            mpx_log_s(MPX_PARAMS[i].name);      /* the five a skill cannot write */
+    /* ── A3. Five parameters a skill cannot write ────────────────────────
+     * The calibration slots decide what every angle MEANS — where centre is,
+     * how far the range spans, which way the motor turns. Change one and every
+     * command afterwards means something different, including the built-in
+     * gaits'. Worse, mpx_gain_save() would burn it into the driver board's
+     * flash, where a reboot will not clear it. A skill that flips
+     * REVERSE_MOTOR on one joint leaves a robot tearing at its own legs, and
+     * the damage outlives the skill that caused it.
+     *
+     * So they are refused: mpx_gain_set() returns MPX_ERR_READONLY. Change
+     * them from Servo Studio instead, with a human watching the joint move.
+     *
+     * You never have to find out by trying. Ask first — which is what you want
+     * anyway the moment the parameter is a variable rather than a literal: */
+    mpx_param_t p = MPX_PARAM_REVERSE_MOTOR;
+    if (mpx_param_read_only(p))
+        mpx_log_s(mpx_param_name(p));       /* "reverse_motor" — do not write */
 
     /* ── B. Driving joints directly ──────────────────────────────────────
      * Same discipline as one layer up: stage what you want, send once.
