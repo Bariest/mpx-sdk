@@ -81,11 +81,13 @@ slow disk indistinguishable from an uninstalled compiler.
 """
 
 
-def _run(cmd: list[str], timeout: int = 10) -> tuple[int, str, str]:
+def _run(cmd: list[str], timeout: int = 10,
+         stdin: str | None = None) -> tuple[int, str, str]:
     """Run a command and return (returncode, stdout, stderr)."""
     try:
         proc = subprocess.run(
             cmd,
+            input=stdin,
             capture_output=True,
             text=True,
             timeout=timeout,
@@ -150,17 +152,60 @@ def _probe(tc: Toolchain, label: str, cand: str | None,
     return True
 
 
+def _can_emit_wasm32(cand: str) -> bool | None:
+    """Can this clang actually build a skill? True / False / None = cannot tell.
+
+    FINDING A CLANG IS NOT FINDING THE WASI SDK, and treating them as the same
+    thing produced the worst error message in this CLI. ESP-IDF installs its
+    own clang and puts it on PATH. Detection found it, ran --version, and
+    cheerfully reported "ok  WASI SDK 19.1.2" — 19.1.2 being esp-clang's
+    version, not any WASI SDK's. `mpx-cli doctor` then said "Looks good", and
+    every build died with:
+
+        error: unable to create target: 'No available targets are compatible
+        with triple "wasm32-unknown-wasip1"'
+
+    which reads like the SDK is broken when the toolchain is simply the wrong
+    one. So: compile an empty file for the real target and see.
+
+    A TIMEOUT IS NOT A FAILURE HERE, for the same reason it is not one in
+    _probe(): the first read of a large binary on a cold container can take a
+    while, and being slow is not being wrong. Only a clean, fast "no" vetoes.
+    """
+    rc, out, err = _run([cand, "--target=wasm32-wasip1", "-nostdlib",
+                         "-c", "-x", "c", "-o", os.devnull, "-"],
+                        timeout=60, stdin="int main(void){return 0;}")
+    if rc == TIMED_OUT:
+        return None
+    return rc == 0
+
+
 def _detect_wasi() -> Toolchain:
-    """Detect WASI SDK (C/C++ → WASM), and remember where it looked."""
+    """Detect WASI SDK (C/C++ → WASM), and remember where it looked.
+
+    Known install locations are tried BEFORE `clang` on PATH, because on a
+    machine with ESP-IDF the PATH clang is usually the Xtensa one.
+    """
     tc = Toolchain(name="WASI SDK", key="wasi", extensions=[".c", ".cc", ".cpp"])
     candidates = [
-        ("$WASI_CC",             os.environ.get("WASI_CC")),
-        ("clang on PATH",        shutil.which("clang")),
-        ("/opt/wasi-sdk/bin/clang", "/opt/wasi-sdk/bin/clang"),
+        ("$WASI_CC",                 os.environ.get("WASI_CC")),
+        ("/opt/wasi-sdk/bin/clang",  "/opt/wasi-sdk/bin/clang"),
+        (r"C:\wasi-sdk\bin\clang.exe", r"C:\wasi-sdk\bin\clang.exe"),
+        ("clang on PATH",            shutil.which("clang")),
     ]
     for label, cand in candidates:
-        if _probe(tc, label, cand, r"version\s+([\d.]+)"):
-            break
+        if not _probe(tc, label, cand, r"version\s+([\d.]+)"):
+            continue
+        capable = _can_emit_wasm32(cand)
+        if capable is False:
+            tc.bin = None
+            tc.version = ""
+            tc.tried[-1] = (f"{label}: {cand} exists but has NO wasm32 target"
+                            " — that is usually an ESP-IDF or Xtensa clang")
+            continue
+        if capable is None:
+            tc.tried[-1] += " (wasm32 probe timed out; assuming usable)"
+        return tc
     return tc
 
 

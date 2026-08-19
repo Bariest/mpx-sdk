@@ -93,6 +93,18 @@ def cmd_doctor(args: argparse.Namespace) -> None:
             any_compiler = True
             _line(OK, tc.name, f"{tc.version or ''}".strip())
         else:
+            # If we found a compiler that simply cannot emit wasm32, SAY SO.
+            # "not found" sent people looking for a clang they already had,
+            # while the real problem was that the one on PATH was ESP-IDF's.
+            wrong = [t for t in tc.tried if "NO wasm32 target" in t]
+            if wrong:
+                _line(WARN, tc.name, "found, but it cannot build skills",
+                      wrong[0] + "\n"
+                      "  Install the WASI SDK and point at it:\n"
+                      "    https://github.com/WebAssembly/wasi-sdk/releases\n"
+                      "    setx WASI_CC C:\\wasi-sdk\\bin\\clang.exe      (Windows)\n"
+                      "    export WASI_CC=/opt/wasi-sdk/bin/clang     (Linux/macOS)")
+                continue
             _line(WARN, tc.name, "not found",
                   {"WASI SDK": "For C skills — the usual choice.\n"
                                "  https://github.com/WebAssembly/wasi-sdk/releases -> /opt/wasi-sdk",
