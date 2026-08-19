@@ -66,9 +66,7 @@
       "status": "exposed",
       "sdk": [
         "mpx_body",
-        "mpx_body_to",
-        "mpx_body_level",
-        "mpx_pitch"
+        "mpx_body_move"
       ],
       "abi": [
         "robot_set_body_pose"
@@ -78,28 +76,27 @@
     "set_attitude_speed": {
       "status": "exposed",
       "sdk": [
-        "mpx_body_speed"
+        "mpx_body_move"
       ],
       "abi": [
         "robot_set_attitude_speed"
       ],
-      "area": "body"
+      "area": "body",
+      "note": "The speed travels with the pose it applies to. mpx_body_speed() was a persistent global that decided how the next mpx_body() anywhere in the file behaved; it is gone."
     },
     "set_attitude_speed_xyz": {
       "status": "exposed",
-      "sdk": [
-        "mpx_body_speed_xyz"
-      ],
+      "sdk": [],
       "abi": [
         "robot_set_attitude_speed_xyz"
       ],
-      "area": "body"
+      "area": "body",
+      "note": "Per-axis attitude slew. No wrapper: one speed for the lean is what a skill wants, and mpx_body_move() takes it. Reachable as robot_set_attitude_speed_xyz() in mpx/abi.h."
     },
     "get_config": {
       "status": "exposed",
       "sdk": [
-        "mpx_gait_config",
-        "mpx_walk_speed"
+        "mpx_gait_config"
       ],
       "abi": [
         "robot_get_period",
@@ -114,8 +111,7 @@
     "set_config": {
       "status": "exposed",
       "sdk": [
-        "mpx_gait_config_set",
-        "mpx_walk_speed_set"
+        "mpx_gait_config_set"
       ],
       "abi": [
         "robot_set_config",

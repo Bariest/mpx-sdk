@@ -47,24 +47,38 @@ MPX_EXPORT void on_start(void)
     mpx_frame_send();                       /* ← once per frame */
     mpx_sleep(700);
 
-    /* ── B. Your own inverse kinematics ──────────────────────────────────
+    /* ── B. Solving a leg yourself ───────────────────────────────────────
      * A WASM skill has no libm, so mpx/math.h provides sin, sqrt, atan2 and
-     * the rest. Use them. Rolling your own atan from the Taylor series is
-     * off by up to 3.5 degrees inside a leg's working range.
+     * the rest. Use them. Rolling your own atan from the Taylor series is off
+     * by up to 3.5 degrees inside a leg's working range.
      *
-     * mpx_ik2() solves a two-link leg. The link lengths come from
-     * mpx/geometry.h, generated from the firmware's own kinematics headers —
-     * so they are the numbers the built-in gait uses, not an estimate. */
+     * THERE USED TO BE AN mpx_ik2() HERE AND IT WAS WRONG. It solved with the
+     * Stanford calf (60 mm) and a hardcoded centring, while mpx_foot_set()
+     * goes through the firmware's planar IK (56 mm calf, neutral computed from
+     * NEUTRAL_Z, per-leg sign flips). Side by side they disagree by 12 degrees
+     * at the standing pose and 74 degrees at reach — and the leg still moved,
+     * so nothing announced it.
+     *
+     * If you want the joint angles for a foot position, do not model the leg.
+     * ASK THE ROBOT: place the foot, then read the joints back. Whatever the
+     * firmware does, this agrees with it, forever. */
+    mpx_foot_set(MPX_FR, 20.0f, 0.0f, MPX_STAND_Z_MM + 14.0f);
+    mpx_frame_send();
+    mpx_sleep(300);
+
+    const float sh_lift = mpx_joint_at(MPX_FR_SHOULDER);
+    const float kn_lift = mpx_joint_at(MPX_FR_KNEE);
+    mpx_log_f("shoulder at lift", sh_lift);
+    mpx_log_f("knee at lift",     kn_lift);
+
+    /* Now they are just numbers, and layer 3 can interpolate them however it
+     * likes — including in ways layer 2 cannot express. */
     for (int i = 0; i <= 80; ++i) {
         float t = (float)i / 80.0f;
-        float x = 22.0f * mpx_sind(t * 360.0f);          /* fore and aft  */
-        float z = MPX_STAND_Z_MM + 14.0f * mpx_sind(t * 180.0f);
+        float k = mpx_ease(MPX_EASE_INOUT, mpx_sind(t * 180.0f));
 
-        float shoulder, knee;
-        mpx_ik2(x, z, &shoulder, &knee);                 /* -> degrees    */
-
-        mpx_joint_set(MPX_FR_SHOULDER, shoulder);
-        mpx_joint_set(MPX_FR_KNEE,     knee);
+        mpx_joint_set(MPX_FR_SHOULDER, sh_lift * k);
+        mpx_joint_set(MPX_FR_KNEE,     kn_lift * k);
         mpx_frame_send();
         mpx_sleep(16);                                   /* ~60 fps       */
     }

@@ -33,6 +33,16 @@
 
 static float s_gain;
 
+/* Both front feet forward and lower — what mpx_stance_front() used to hide.
+ * Three lines at the call site say which feet moved; the name never did. */
+static mpx_stance_t front_reach(float reach_mm, float front_z_mm)
+{
+    mpx_stance_t s = mpx_stance_stand();
+    s = mpx_stance_with(s, MPX_FR, reach_mm, 0.0f, front_z_mm);
+    s = mpx_stance_with(s, MPX_FL, reach_mm, 0.0f, front_z_mm);
+    return s;
+}
+
 /* ── L2: a bow, as two keyframes ─────────────────────────────────────────
  * A timeline is the right shape for "a pose, over time". Writing this as a
  * for-loop of magic constants is the mistake mpx/motion.h exists to stop. */
@@ -40,7 +50,7 @@ static void bow(void)
 {
     mpx_stance_key_t keys[] = {
         {    0, mpx_stance_stand(),              MPX_EASE_LINEAR },
-        {  650, mpx_stance_front(22.0f, -52.0f), MPX_EASE_INOUT  },
+        {  650, front_reach(22.0f, -52.0f),      MPX_EASE_INOUT  },
         { 1500, mpx_stance_stand(),              MPX_EASE_OUT    },
     };
     mpx_stance_play(keys, 3, mpx_play(50, 1));
@@ -84,8 +94,7 @@ MPX_EXPORT void on_start(void)
     const int walk_mm_s = mpx_parami("speed", 50);
 
     /* L1 — walk in. No maths, no risk. */
-    mpx_walk_speed_set(walk_mm_s);
-    mpx_drive_for(60.0f, 0.0f, 0.0f, 1800);
+    mpx_drive_for((float)walk_mm_s, 0.0f, 0.0f, 1800);   /* the param, in mm/s */
 
     bow();                                  /* L2 */
     wave();                                 /* L3 */

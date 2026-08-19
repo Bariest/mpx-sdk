@@ -51,12 +51,23 @@ A WASM skill has **no libm** — no `sin`, no `sqrt`, no `atan2`. `mpx/math.h`
 provides them. Use it: writing your own `atan` from the Taylor series is off by
 up to **3.5°** inside a leg's working range, which is a real bug people ship.
 
-`mpx_ik2()` solves a two-link leg if you just want the angles:
+There is no `mpx_ik2()`. There was, and it disagreed with the robot's own IK
+by up to 74 degrees — a different calf length and a hardcoded centring — while
+still moving the leg, so nothing announced the error.
+
+To get joint angles for a foot position, ask the robot rather than modelling
+it:
 
 ```c
-float shoulder, knee;
-mpx_ik2(x_mm, z_mm, &shoulder, &knee);
+mpx_foot_set(MPX_FR, 20.0f, 0.0f, MPX_STAND_Z_MM + 14.0f);
+mpx_frame_send();
+mpx_sleep(300);
+
+float shoulder = mpx_joint_at(MPX_FR_SHOULDER);
+float knee     = mpx_joint_at(MPX_FR_KNEE);
 ```
+
+Whatever the firmware does, this agrees with it.
 
 ## Closing a loop — and the mistake that diverges
 

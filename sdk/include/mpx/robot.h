@@ -122,7 +122,7 @@ static inline int mpx_gait_current(void) { return robot_get_mode(); }
  *  REAL UNITS, ONE WAY. There was a second entry point taking -1..+1 on each
  *  axis, matching the firmware's joystick path. It is gone, because -1..+1 is
  *  not a self-describing unit: 0.33 means nothing until you know what
- *  mpx_walk_speed_set() was last set to, possibly by a different skill or by
+ *  the firmware's walk-speed global was last set to, possibly by another skill or by
  *  the phone. A unit whose meaning lives in global state is the same class of
  *  problem as a gain that outlives the skill that set it.
  *
@@ -141,8 +141,11 @@ static inline int mpx_stop(void) { return mpx_drive_stop(); }
  *  controlled.
  *
  *  Note that mpx_drive_mm_s() writes this as a side effect; see there. */
-static inline int mpx_walk_speed_set(int mm_s) { return mpx_set_walk_speed(mm_s); }
-static inline int mpx_walk_speed(void)         { return mpx_get_walk_speed(); }
+/* mpx_walk_speed_set()/mpx_walk_speed() were here. They set a GLOBAL that
+ * mpx_drive_mm_s() also writes as a side effect — two ways to say one thing,
+ * and the invisible one won whenever both were used. Speed is an argument now:
+ * mpx_drive_mm_s() and mpx_drive_for() take mm/s directly. (Still reachable as
+ * mpx_set_walk_speed() in mpx/abi.h if you really want the global.) */
 
 /** Drive in real units: mm/s forward and sideways, degrees/s of turn.
  *
@@ -160,10 +163,10 @@ static inline int mpx_walk_speed(void)         { return mpx_get_walk_speed(); }
  *  automatically would need the SDK to keep state of its own, and hidden state
  *  is the thing this API keeps getting bitten by. If it matters, save it:
  *
- *      const int was = mpx_walk_speed();
+ *      const int was = mpx_get_walk_speed();      // from mpx/abi.h
  *      mpx_drive_mm_s(60.0f, 0.0f, 15.0f);
  *      ... mpx_stop();
- *      mpx_walk_speed_set(was);
+ *      mpx_set_walk_speed(was);
  *
  *  Speeds above MPX_WALK_MAX_MM_S are clamped by the firmware.
  */
@@ -174,7 +177,7 @@ static inline int mpx_drive_mm_s(float fwd_mm_s, float strafe_mm_s, float turn_d
     if (mag < 1.0f)
         return mpx_drive(0.0f, 0.0f, turn_dps / 90.0f);
 
-    int rc = mpx_walk_speed_set((int)(mag + 0.5f));
+    int rc = mpx_set_walk_speed((int)(mag + 0.5f));   /* the ABI call, not a wrapper */
     if (rc != MPX_OK) return rc;
     return mpx_drive(fwd_mm_s / mag, strafe_mm_s / mag, turn_dps / 90.0f);
 }
@@ -221,18 +224,23 @@ static inline int mpx_body(float roll_deg, float pitch_deg, float yaw_deg)
  * Four names for one call, and the argument order is written on the line
  * above, so nothing is lost by spelling it out. */
 
-/** Degrees per second for attitude changes. 0 = snap instantly. Persists. */
-static inline int mpx_body_speed(int dps) { return robot_set_attitude_speed(dps); }
+/* mpx_body_speed() and mpx_body_speed_xyz() were here, for the same reason:
+ * a persistent global that decided how the NEXT mpx_body() behaved, set
+ * somewhere else in the file — or by a different skill. mpx_body_move() below
+ * takes the speed with the pose it applies to. */
 
-/** Per-axis glide speed, for when yaw should drift while roll stays crisp. */
-static inline int mpx_body_speed_xyz(int roll_dps, int pitch_dps, int yaw_dps)
-{
-    return robot_set_attitude_speed_xyz(roll_dps, pitch_dps, yaw_dps);
-}
 
-/** Glide to an attitude at a given speed, and wait for it to arrive. */
-static inline int mpx_body_to(float roll_deg, float pitch_deg, float yaw_deg,
-                              int dps, int settle_ms)
+/** Lean the body to an attitude at `dps` degrees per second, and wait for it.
+ *
+ *  Named _move for the same reason as mpx_joint_move() and mpx_foot_move():
+ *  across this whole SDK, _move means "go there, at this speed, and block
+ *  until you arrive". 0 dps snaps instantly.
+ *
+ *  This is the ONE real hardware speed limit on the robot. Body attitude is
+ *  slewed by the firmware's gait task, not by the servo bus, so unlike joints
+ *  and feet the rate is enforced rather than interpolated. */
+static inline int mpx_body_move(float roll_deg, float pitch_deg, float yaw_deg,
+                                int dps, int settle_ms)
 {
     int rc = robot_set_attitude_speed(dps);
     if (rc != MPX_OK) return rc;

@@ -167,7 +167,7 @@ static inline mpx_joint_t mpx_joint(mpx_leg_t leg, mpx_part_t part)
  *
  *  This used to pass z straight through, which meant every foot call asked for
  *  a pose 180 degrees from the one written. atan2(x, zd) flips by pi when zd
- *  goes negative, so mpx_feet_stand() at z = -70 resolved to servo2 = servo3 =
+ *  goes negative, so a stand at z = -70 resolved to servo2 = servo3 =
  *  -180 and then clamped at the joint limit. It did not error and it did not
  *  warn; the legs just went somewhere else.
  *
@@ -214,11 +214,10 @@ static inline int mpx_feet_set(float x_mm, float splay_deg, float z_mm)
     return worst;
 }
 
-/** The neutral four-feet-planted stance. */
-static inline int mpx_feet_stand(void)
-{
-    return mpx_feet_set(0.0f, 0.0f, MPX_STAND_Z_MM);
-}
+/* mpx_feet_stand() was here. It was mpx_feet_set(0, 0, MPX_STAND_Z_MM) with
+ * the arguments hidden, and it staged without sending while its name suggested
+ * the robot would stand. It also sat one letter away from mpx_stand(), which
+ * is a layer-1 gait and a different thing entirely. Spell it out. */
 
 /* ═══════════════════════════════════════════════════════════════════════════
  *  Joints — you solve, the firmware passes it on
@@ -467,45 +466,20 @@ static inline int mpx_offset_set(mpx_joint_t j, float deg)
 /** Clear every calibration offset. Recalibration follows. */
 static inline int mpx_offsets_reset(void) { return mpx_reset_offsets(); }
 
-/* ═══════════════════════════════════════════════════════════════════════════
- *  Two-link inverse kinematics, in your module
+/* mpx_ik2() was here, and it lied. It solved a two-link leg with MPX_CALF_MM
+ * (60 mm, the Stanford model) and a hardcoded -45/-90 degree centring, while
+ * mpx_foot_set() below goes through the firmware's planar IK: 56 mm calf, a
+ * neutral computed from NEUTRAL_Z, and per-leg sign flips. Compared side by
+ * side they disagree by 12 degrees at the standing pose and by up to 74
+ * degrees at reach. A skill that solved a leg with mpx_ik2() and commanded the
+ * angles landed somewhere else entirely -- and the leg still moved, so nothing
+ * announced the error.
  *
- *  The firmware's IK is better in almost every case — it inherits the
- *  calibration and matches the built-in gaits. This is here for when you are
- *  learning what IK does, or building on top of it.
- *
- *  Returns MPX_OK, or MPX_ERR_ARG if the target was out of reach, in which
- *  case the angles returned are for the closest reachable point rather than
- *  garbage.
- * ═══════════════════════════════════════════════════════════════════════════ */
-
-static inline int mpx_ik2(float x_mm, float z_mm,
-                          float *shoulder_deg, float *knee_deg)
-{
-    float d2, d, knee, sh, s;
-    int   reachable = 1;
-
-    d2 = x_mm * x_mm + z_mm * z_mm;
-    d  = mpx_sqrt(d2);
-
-    if (d > MPX_REACH_MM - 1.0f) {          /* pull the target into reach */
-        reachable = 0;
-        s = (MPX_REACH_MM - 1.0f) / (d > 0.0f ? d : 1.0f);
-        x_mm *= s; z_mm *= s;
-        d2 = x_mm * x_mm + z_mm * z_mm;
-        d  = mpx_sqrt(d2);
-    }
-
-    knee = mpx_acos((d2 - MPX_THIGH_MM * MPX_THIGH_MM - MPX_CALF_MM * MPX_CALF_MM)
-                    / (2.0f * MPX_THIGH_MM * MPX_CALF_MM));
-    sh   = mpx_atan2(x_mm, -z_mm)
-         + mpx_acos((d2 + MPX_THIGH_MM * MPX_THIGH_MM - MPX_CALF_MM * MPX_CALF_MM)
-                    / (2.0f * MPX_THIGH_MM * (d > 0.0f ? d : 1.0f)));
-
-    if (shoulder_deg) *shoulder_deg = mpx_deg(sh)   - 45.0f;
-    if (knee_deg)     *knee_deg     = mpx_deg(knee) - 90.0f;
-    return reachable ? MPX_OK : MPX_ERR_ARG;
-}
+ * If you want the angles for a foot position, ask the robot for them: call
+ * mpx_foot_set() and read mpx_joint_at(). If you are writing your own model,
+ * mpx/geometry.h has the dimensions -- but know that the FEET path uses the
+ * firmware's planar IK, whose calf is 56 mm, not MPX_CALF_MM's 60 mm.
+ */
 
 #ifdef __cplusplus
 }

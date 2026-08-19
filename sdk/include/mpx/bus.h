@@ -169,7 +169,7 @@ static inline int mpx_gain_restore(mpx_joint_t j) { return servo_restore_config(
 /* ═══════════════════════════════════════════════════════════════════════════
  *  Moving
  *
- *  One joint: mpx_bus_move(). Several at once: stage them, then send.
+ *  One joint: mpx_bus_apply(). Several at once: stage them, then send.
  *
  *  The two-step exists because one bus transaction per FRAME is what keeps
  *  motion smooth — sending per joint gives you a robot that judders. But that
@@ -183,7 +183,7 @@ static inline int mpx_gain_restore(mpx_joint_t j) { return servo_restore_config(
  *  centre. Uses the gains already set and the board's own current limit.
  *
  *  The call to reach for. Anything it cannot express is below. */
-static inline int mpx_bus_move(mpx_joint_t j, float deg)
+static inline int mpx_bus_apply(mpx_joint_t j, float deg)
 {
     int rc = servo_stage((int)j, MPX_ABS_FROM_REL(deg), 0.0f, 0.0f, 0.0f);
     if (rc != MPX_OK) return rc;
@@ -194,21 +194,25 @@ static inline int mpx_bus_move(mpx_joint_t j, float deg)
  *
  *  Nothing moves until you send. Stage every joint of the frame, then send
  *  once. */
-static inline int mpx_bus_stage(mpx_joint_t j, float deg)
+static inline int mpx_bus_set(mpx_joint_t j, float deg)
 {
     return servo_stage((int)j, MPX_ABS_FROM_REL(deg), 0.0f, 0.0f, 0.0f);
 }
 
-/** mpx_bus_stage() with the per-frame overrides.
+/** mpx_bus_set() with a per-frame CURRENT CAP, in milliamps.
  *
- *  @param tau_ma  Current cap for this move, mA. 0 uses the board's own.
- *  @param kp,kd   Per-frame gains. 0,0 uses the gains already set — which is
- *                 what you want unless you are modulating stiffness WITHIN a
- *                 motion, such as going compliant as a foot lands. */
-static inline int mpx_bus_stage_ex(mpx_joint_t j, float deg, float tau_ma,
-                                   float kp, float kd)
+ *  Use it when one frame should be allowed less force than the rest — landing
+ *  softly, or holding against something that might not be there.
+ *
+ *  IT USED TO TAKE kp AND kd TOO, AND THEY DID NOTHING. driver_board.h is
+ *  explicit: "The stock AT32 firmware ignores them and uses its stored
+ *  sms_config gains instead, which is why every other path here sends 0." Two
+ *  arguments that read like the most powerful thing in the SDK and were
+ *  discarded by the board. Gains are set with mpx_gain_set(), which is a real
+ *  config write, and they persist until the sandbox restores them. */
+static inline int mpx_bus_set_ex(mpx_joint_t j, float deg, float tau_ma)
 {
-    return servo_stage((int)j, MPX_ABS_FROM_REL(deg), tau_ma, kp, kd);
+    return servo_stage((int)j, MPX_ABS_FROM_REL(deg), tau_ma, 0.0f, 0.0f);
 }
 
 /** Send every staged joint in one bus transaction. */

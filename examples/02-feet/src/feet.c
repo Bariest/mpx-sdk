@@ -117,7 +117,7 @@ MPX_EXPORT void on_start(void)
      * ones above rather than going inside one. When you need several waypoints
      * or your own easing, mpx/motion.h works in times instead of speeds. */
 
-    mpx_feet_stand();
+    mpx_feet_set(0.0f, 0.0f, STAND);
     mpx_frame_send();
     MPX_LOG("done");
 }

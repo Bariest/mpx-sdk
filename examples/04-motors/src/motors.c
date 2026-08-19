@@ -18,7 +18,7 @@
  *
  *     mpx-cli deploy examples/04-motors
  *
- *     Based on:  mpx/bus.h      (mpx_bus_take, mpx_gain_set, mpx_bus_move)
+ *     Based on:  mpx/bus.h      (mpx_bus_take, mpx_gain_set, mpx_bus_apply)
  *                mpx/params.h   (the driver-board slots, generated)
  */
 #include "mpx.h"
@@ -92,32 +92,37 @@ MPX_EXPORT void on_start(void)
 
     /* ── B. Driving joints directly ──────────────────────────────────────
      * Same discipline as one layer up: stage what you want, send once.
-     * mpx_bus_move() does both in one call for a single joint. Staging is
+     * mpx_bus_apply() does both in one call for a single joint. Staging is
      * for FRAMES: several joints that should arrive together. Everything is
      * relative degrees, +/-135 with 0 at centre — the same convention as the
      * rest of the SDK, and now the only one. */
     for (int i = 0; i <= 60; ++i) {
         float deg = 12.0f * mpx_sind((float)i * 6.0f);
 
-        mpx_bus_stage(MPX_FR_SHOULDER, deg);
-        mpx_bus_stage(MPX_FR_KNEE,     0.0f);
+        mpx_bus_set(MPX_FR_SHOULDER, deg);
+        mpx_bus_set(MPX_FR_KNEE,     0.0f);
         mpx_bus_send();                     /* one transaction for the frame */
         mpx_sleep(16);
     }
 
-    /* ── C. Stiffness as part of the motion ──────────────────────────────
-     * The thing only this layer can do: change how hard the joint fights,
-     * mid-move. Per-frame kp/kd override the persistent gains — here the
-     * knee goes soft as it arrives, so it settles instead of slamming. */
+    /* ── C. Force as part of the motion ──────────────────────────────────
+     * The thing only this layer can do: cap how hard the joint is allowed to
+     * push, frame by frame. Here the knee is given less and less current as it
+     * arrives, so it yields instead of slamming into the end of the move.
+     *
+     * THIS USED TO PASS PER-FRAME kp AND kd TOO, AND THE BOARD THREW THEM
+     * AWAY. driver_board.h is blunt about it: "The stock AT32 firmware ignores
+     * them and uses its stored sms_config gains instead, which is why every
+     * other path here sends 0." So the two most powerful-looking arguments in
+     * the SDK did nothing. They are gone. Stiffness is mpx_gain_set(), above —
+     * a real config write that sticks until the sandbox restores it. */
     for (int i = 0; i <= 40; ++i) {
-        float t    = (float)i / 40.0f;
-        float soft = 90.0f - 60.0f * t;     /* stiff -> compliant */
+        float t   = (float)i / 40.0f;
+        float cap = 700.0f - 400.0f * t;    /* mA: firm -> gentle */
 
-        /* _ex when the frame needs its own current cap or gains — here the
-           knee goes soft as it arrives, so it settles instead of slamming. */
-        mpx_bus_stage_ex(MPX_FR_KNEE, -18.0f * t, 400.0f, soft, 900.0f);
+        mpx_bus_set_ex(MPX_FR_KNEE, -18.0f * t, cap);
         mpx_bus_send();
-        mpx_trace_f("kp", soft);
+        mpx_trace_f("mA cap", cap);
         mpx_sleep(20);
     }
 

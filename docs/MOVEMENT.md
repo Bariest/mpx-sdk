@@ -51,7 +51,7 @@ Walk speed is capped at **200 mm/s**.
 
 ```c
 mpx_body(roll, pitch, yaw);       /* degrees */
-mpx_body_speed(60);               /* deg/s — glide instead of snap */
+mpx_body_move(0, 12, 0, 60, 900); /* roll, pitch, yaw, deg/s, settle ms */
 ```
 
 Clamped by the firmware to **roll ±25°, pitch ±20°, yaw ±30°**, so the robot
@@ -109,8 +109,9 @@ paths — `mpx/motion.h` works in **times** instead: `mpx_stance_glide()`,
 `mpx_pose_glide()`, `mpx_stance_play()`. Time is the right unit there, because
 what makes separate limbs look deliberate is landing together.
 
-Body attitude is the exception with a real hardware speed: `mpx_body_speed()`
-is a deg/s limit enforced by the firmware's gait task, not the servo bus.
+Body attitude is the exception with a real hardware speed: `mpx_body_move()`'s
+deg/s is enforced by the firmware's gait task, not interpolated by the SDK,
+because attitude is slewed away from the servo bus.
 
 ## Units — degrees, everywhere that matters
 
@@ -190,7 +191,7 @@ MPX_EXPORT void on_start(void)
 
     mpx_stance_key_t bow[] = {
         {    0, mpx_stance_stand(),              MPX_EASE_LINEAR },
-        {  700, mpx_stance_front(22.0f, -52.0f), MPX_EASE_INOUT  },
+        {  700, front_reach(22.0f, -52.0f),      MPX_EASE_INOUT  },
         { 1600, mpx_stance_stand(),              MPX_EASE_OUT    },
     };
     mpx_stance_play(bow, 3, mpx_play(50, mpx_parami("repeats", 1)));
@@ -325,7 +326,7 @@ The lowest layer: per-joint Kp/Kd and direct current control.
 ```c
 mpx_bus_take();                                   /* parks the gait */
 mpx_gain_set(MPX_FR_KNEE, MPX_PARAM_KP_POSITION, 95.0f);
-mpx_bus_move(MPX_FR_KNEE, -8.0f);                 /* one joint, one call */
+mpx_bus_apply(MPX_FR_KNEE, -8.0f);                 /* one joint, one call */
 mpx_bus_release();
 ```
 
@@ -336,12 +337,12 @@ Moving several joints *together* is the one case that needs two steps, because
 one bus transaction per frame is what stops the robot juddering:
 
 ```c
-mpx_bus_stage(MPX_FR_SHOULDER, 12.0f);
-mpx_bus_stage(MPX_FR_KNEE,     -8.0f);
+mpx_bus_set(MPX_FR_SHOULDER, 12.0f);
+mpx_bus_set(MPX_FR_KNEE,     -8.0f);
 mpx_bus_send();                       /* nothing moves until this line */
 ```
 
-`mpx_bus_stage_ex()` adds a per-frame current cap and gains, for when
+`mpx_bus_set_ex()` adds a per-frame current cap and gains, for when
 stiffness is part of the motion.
 
 Five parameters return `MPX_ERR_READONLY` from a skill: the three calibration

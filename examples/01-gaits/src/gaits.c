@@ -39,7 +39,6 @@ MPX_EXPORT void on_start(void)
      * gently" the robot takes a velocity — the same path the phone's
      * joystick uses.
      */
-    mpx_walk_speed_set(40);                 /* mm/s that 1.0 means. Max 200. */
     mpx_drive_for(40.0f, 0.0f, 15.0f, 2500);  /* mm/s, mm/s, deg/s — then stop */
 
     /* Or in real units, if that is what you know: */
@@ -51,11 +50,12 @@ MPX_EXPORT void on_start(void)
      * The feet stay planted and the body moves over them. Firmware-clamped
      * to roll +/-25, pitch +/-20, yaw +/-30 — you cannot ask it to tip over.
      */
-    mpx_body_speed(60);                     /* deg/s, so it glides not snaps */
-    mpx_body(0.0f, 12.0f, 0.0f);            /* roll, pitch, yaw */
-    mpx_sleep(900);
-    mpx_body(0.0f, 0.0f, 0.0f);
-    mpx_sleep(900);
+    mpx_body_move(0.0f, 12.0f, 0.0f, 60, 900);   /* roll, pitch, yaw, deg/s, settle */
+    mpx_body_move(0.0f,  0.0f, 0.0f, 60, 900);
+
+    /* mpx_body() alone snaps there instantly. _move names the speed with the
+     * pose it applies to, instead of setting a global that decides how the
+     * NEXT mpx_body() anywhere in the file behaves. */
 
     mpx_stand();
     MPX_LOG("done");

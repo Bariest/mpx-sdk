@@ -22,7 +22,7 @@ layer can express any of that** — it is the only reason to come down here.
 mpx_bus_take();
 mpx_gain_set(MPX_ALL_JOINTS, MPX_PARAM_KP_POSITION, 65.0f);  /* stock */
 mpx_gain_set(MPX_FR_KNEE, MPX_PARAM_KP_POSITION, 95.0f);   /* one stiffer */
-mpx_bus_move(MPX_FR_KNEE, -18.0f);
+mpx_bus_apply(MPX_FR_KNEE, -18.0f);
 mpx_bus_send();
 mpx_bus_release();
 ```
@@ -81,7 +81,7 @@ Change stiffness *during* a motion:
 
 ```c
 float soft = 90.0f - 60.0f * t;                       /* stiff → compliant */
-mpx_bus_stage_ex(MPX_FR_KNEE, -18.0f * t, 400.0f, soft, 900.0f);
+mpx_bus_set_ex(MPX_FR_KNEE, -18.0f * t, 400.0f, soft, 900.0f);
 mpx_bus_send();
 ```
 
@@ -90,7 +90,7 @@ not a pose — it is a *feel*, and it is invisible to every other layer.
 
 ## A note on angle frames
 
-`mpx_bus_stage()` takes the same relative degrees as the rest of the SDK, and
+`mpx_bus_set()` takes the same relative degrees as the rest of the SDK, and
 is now the only convention. The 0–270 wire frame is reachable through the
 0–270° frame where 135 is centre. Prefer the first: one angle convention in
 your code is worth more than matching the wire.

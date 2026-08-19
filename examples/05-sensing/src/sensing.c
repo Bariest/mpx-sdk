@@ -49,7 +49,6 @@ MPX_EXPORT void on_start(void)
      * Counter-rotating the BODY (layer 1) keeps the feet planted, so this is
      * safe on a slope. Tilt the robot by hand and watch it compensate. */
     MPX_LOG("B — tilt me; I will stay level");
-    mpx_body_speed(120);                       /* deg/s, so it glides */
 
     for (int i = 0; i < 250; ++i) {            /* ~5 s at 20 ms */
         float roll, pitch;

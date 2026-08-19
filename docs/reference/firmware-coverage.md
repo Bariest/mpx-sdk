@@ -27,8 +27,8 @@ Movements the firmware already knows.
 |---|---|---|
 | `robot::send_gait_cmd()` | `mpx_gait()` · `mpx_gait_for()` · `mpx_gait_once()` · `mpx_gait_play()` |  |
 | `robot::current_gait_cmd()` | `mpx_gait_current()` |  |
-| `robot::get_config()` | `mpx_gait_config()` · `mpx_walk_speed()` |  |
-| `robot::set_config()` | `mpx_gait_config_set()` · `mpx_walk_speed_set()` |  |
+| `robot::get_config()` | `mpx_gait_config()` |  |
+| `robot::set_config()` | `mpx_gait_config_set()` |  |
 | `robot::gait_from_name()` | `mpx_gait()` | The one name table. A skill sends a name; this resolves it, including names other skills provide. |
 | `robot::gait_name_count()` | `MPX_GAITS()` · `MPX_GAIT_COUNT()` | The SDK ships the same catalogue as a generated table, so a skill needs no call to enumerate. |
 | `robot::gait_name_at()` | `mpx_gait_name()` |  |
@@ -47,9 +47,9 @@ Roll, pitch and yaw with the feet planted.
 
 | Firmware | Call it from a skill with | |
 |---|---|---|
-| `robot::set_body_attitude()` | `mpx_body()` · `mpx_body_to()` · `mpx_body_level()` · `mpx_pitch()` |  |
-| `robot::set_attitude_speed()` | `mpx_body_speed()` |  |
-| `robot::set_attitude_speed_xyz()` | `mpx_body_speed_xyz()` |  |
+| `robot::set_body_attitude()` | `mpx_body()` · `mpx_body_move()` |  |
+| `robot::set_attitude_speed()` | `mpx_body_move()` | The speed travels with the pose it applies to. mpx_body_speed() was a persistent global that decided how the next mpx_body() anywhere in the file behaved; it is gone. |
+| `robot::set_attitude_speed_xyz()` | `robot_set_attitude_speed_xyz()` | Per-axis attitude slew. No wrapper: one speed for the lean is what a skill wants, and mpx_body_move() takes it. Reachable as robot_set_attitude_speed_xyz() in mpx/abi.h. |
 
 ### Feet
 

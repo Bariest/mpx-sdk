@@ -31,6 +31,32 @@
 
 #include "mpx.h"
 
+/* ── Removed in the API reduction; here so old skills still build ────────── */
+static inline int mpx_walk_speed_set(int mm_s) { return mpx_set_walk_speed(mm_s); }
+static inline int mpx_walk_speed(void)         { return mpx_get_walk_speed(); }
+static inline int mpx_body_speed(int dps)      { return robot_set_attitude_speed(dps); }
+static inline int mpx_body_speed_xyz(int r, int p, int y)
+                                { return robot_set_attitude_speed_xyz(r, p, y); }
+static inline int mpx_body_to(float r, float p, float y, int dps, int settle_ms)
+                                { return mpx_body_move(r, p, y, dps, settle_ms); }
+static inline int mpx_bus_stage(mpx_joint_t j, float deg) { return mpx_bus_set(j, deg); }
+static inline int mpx_bus_move (mpx_joint_t j, float deg) { return mpx_bus_apply(j, deg); }
+static inline int mpx_bus_stage_ex(mpx_joint_t j, float deg, float tau_ma,
+                                   float kp, float kd)
+{   /* kp/kd were always discarded by the stock AT32 firmware. */
+    (void)kp; (void)kd; return mpx_bus_set_ex(j, deg, tau_ma);
+}
+static inline mpx_stance_t mpx_stance_crouch(float drop_mm)
+{   return mpx_stance_all(0.0f, 0.0f, MPX_STAND_Z_MM + drop_mm); }
+static inline mpx_stance_t mpx_stance_front(float reach_mm, float front_z_mm)
+{
+    mpx_stance_t s = mpx_stance_stand();
+    s = mpx_stance_with(s, MPX_FR, reach_mm, 0.0f, front_z_mm);
+    s = mpx_stance_with(s, MPX_FL, reach_mm, 0.0f, front_z_mm);
+    return s;
+}
+
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -143,6 +169,7 @@ static inline int mpx_foot_to (mpx_leg_t leg, float x, float splay, float z)
                                                 { return mpx_foot_set(leg, x, splay, z); }
 static inline int mpx_feet_to (float x, float splay, float z)
                                                 { return mpx_feet_set(x, splay, z); }
+static inline int mpx_feet_stand(void) { return mpx_feet_set(0.0f, 0.0f, MPX_STAND_Z_MM); }
 
 /* ── Joints ──────────────────────────────────────────────────────────────── */
 static inline int  robot_set_servo_deg(mpx_joint_t j, float deg) { return mpx_joint_set(j, deg); }

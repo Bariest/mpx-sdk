@@ -71,20 +71,19 @@ static inline mpx_stance_t mpx_stance_stand(void)
     return mpx_stance_all(0.0f, 0.0f, MPX_STAND_Z_MM);
 }
 
-/** Crouched by `drop` mm. Positive drop brings the body down. */
-static inline mpx_stance_t mpx_stance_crouch(float drop_mm)
-{
-    return mpx_stance_all(0.0f, 0.0f, MPX_STAND_Z_MM + drop_mm);
-}
 
-/** Front feet forward and higher, rear planted — a bow, a beg, a reach. */
-static inline mpx_stance_t mpx_stance_front(float reach_mm, float front_z_mm)
-{
-    mpx_stance_t s = mpx_stance_stand();
-    s.leg[MPX_FR].x = reach_mm; s.leg[MPX_FR].z = front_z_mm;
-    s.leg[MPX_FL].x = reach_mm; s.leg[MPX_FL].z = front_z_mm;
-    return s;
-}
+/* mpx_stance_crouch(d) and mpx_stance_front(reach, z) were here. Both were
+ * mpx_stance_all()/mpx_stance_with() with the numbers hidden behind a name:
+ *
+ *     mpx_stance_crouch(18.0f)
+ *       -> mpx_stance_all(0.0f, 0.0f, MPX_STAND_Z_MM + 18.0f)
+ *     mpx_stance_front(22.0f, -52.0f)
+ *       -> s = mpx_stance_stand();
+ *          s = mpx_stance_with(s, MPX_FR, 22.0f, 0.0f, -52.0f);
+ *          s = mpx_stance_with(s, MPX_FL, 22.0f, 0.0f, -52.0f);
+ *
+ * Spelled out, the call site says which feet moved and by how much. The name
+ * never did. */
 
 /** Lift one foot to `lift_mm` above the standing height. */
 static inline mpx_stance_t mpx_stance_lift(mpx_stance_t s, mpx_leg_t leg,
@@ -129,7 +128,7 @@ static inline int mpx_stance_set(mpx_stance_t s)
 {
     int worst = MPX_OK;
     for (int i = 0; i < 4; ++i) {
-        int rc = mpx_foot_to((mpx_leg_t)i, s.leg[i].x, s.leg[i].splay, s.leg[i].z);
+        int rc = mpx_foot_set((mpx_leg_t)i, s.leg[i].x, s.leg[i].splay, s.leg[i].z);
         if (rc != MPX_OK) worst = rc;
     }
     return worst;
@@ -193,7 +192,7 @@ static inline int mpx_pose_set(mpx_pose_t p)
 {
     int worst = MPX_OK;
     for (int i = 1; i <= 12; ++i) {
-        int rc = mpx_joint_to((mpx_joint_t)i, p.deg[i - 1]);
+        int rc = mpx_joint_set((mpx_joint_t)i, p.deg[i - 1]);
         if (rc != MPX_OK) worst = rc;
     }
     return worst;

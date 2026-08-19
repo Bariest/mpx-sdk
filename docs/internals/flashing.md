@@ -48,7 +48,7 @@ idf.py -p COM<n> flash monitor
 | `mpx-cli stop` | the behaviour ends and the robot stands |
 | `GET /v1/robot/status` | the same twelve calibration offsets as before |
 | Servo Studio degree readout | unchanged |
-| A skill calling `mpx_bus_stage()` without `mpx_bus_take()` | returns `-2` |
+| A skill calling `mpx_bus_set()` without `mpx_bus_take()` | returns `-2` |
 | `mpx_gain_set(1, MPX_PARAM_RANGE_POSITION_DEG, 300)` | returns `-4`, read-only |
 | A skill that claims `MPX_OWN_FEET` then calls `mpx_gait()` | returns `-7` |
 | A skill with no `mpx_take()` call at all | behaves exactly as it did on v2 |
