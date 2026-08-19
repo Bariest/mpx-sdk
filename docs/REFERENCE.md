@@ -109,6 +109,7 @@ Run from inside a skill directory and every path is derived from
 | [`mpx-cli install`](#mpx-cli-install) | Download a marketplace skill and put it on the robot |
 | [`mpx-cli gaits`](#mpx-cli-gaits) | List the robot's built-in movements |
 | [`mpx-cli doctor`](#mpx-cli-doctor) | Check that everything needed to build and deploy is present |
+| [`mpx-cli setup`](#mpx-cli-setup) | Download and install the WASI SDK (no Docker needed) |
 | [`mpx-cli trace`](#mpx-cli-trace) | Plot the named numbers a running skill emits |
 | [`mpx-cli movements`](#mpx-cli-movements) | Every movement this robot can perform, built-in and skill-provided |
 | [`mpx-cli stop`](#mpx-cli-stop) | Ask the running skill to stop (the only way to end a behaviour) |
@@ -228,6 +229,12 @@ Alias: `mpx-cli ls`
 | `--ip`, `-i` | Robot IP address (default: 192.168.2.1, env: MPX_HOST) |
 | `--port`, `-p` | Robot HTTP port (default: 80, env: MPX_PORT) |
 | `--no-robot` | Skip the robot connectivity check |
+
+### `mpx-cli setup`
+
+| Option | Meaning |
+|---|---|
+| `--force` | Reinstall even if it is already there |
 
 ### `mpx-cli trace`
 

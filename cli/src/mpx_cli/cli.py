@@ -22,6 +22,7 @@ from mpx_cli.commands.logs import add_logs_parser, cmd_logs
 from mpx_cli.commands.install import add_install_parser, cmd_install
 from mpx_cli.commands.gaits import add_gaits_parser, cmd_gaits
 from mpx_cli.commands.doctor import add_doctor_parser, cmd_doctor
+from mpx_cli.commands.setup import add_setup_parser
 from mpx_cli.commands.trace import add_trace_parser, cmd_trace
 from mpx_cli.commands.movements import (add_movements_parser, cmd_movements,
                                         cmd_stop, cmd_safe_mode)
@@ -97,6 +98,7 @@ def build_parser() -> argparse.ArgumentParser:
     add_install_parser(sub)
     add_gaits_parser(sub)
     add_doctor_parser(sub)
+    add_setup_parser(sub)
     add_trace_parser(sub)
     add_movements_parser(sub)
     add_sync_parser(sub)

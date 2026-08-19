@@ -169,6 +169,28 @@ for d in sorted((ROOT / "examples").iterdir()):
     (ok if not problems else fail)(f"{d.name}" + ("" if not problems else ": " + ", ".join(problems)))
 
 # ── 5. compile ──────────────────────────────────────────────────────────────
+section("native install matches the container")
+# `mpx-cli setup` and .devcontainer/Dockerfile both install the WASI SDK. If
+# they ever pin different versions, "works in Docker" and "works natively"
+# stop meaning the same thing -- and that difference is invisible until
+# someone's build behaves differently from their colleague's.
+_dockerfile = ROOT / ".devcontainer" / "Dockerfile"
+_setup = ROOT / "cli" / "src" / "mpx_cli" / "commands" / "setup.py"
+if _dockerfile.exists() and _setup.exists():
+    dtext = _dockerfile.read_text(encoding="utf-8")
+    stext = _setup.read_text(encoding="utf-8")
+    dver = re.search(r"wasi-sdk-(\d+(?:\.\d+)?)-x86_64-linux\.tar\.gz", dtext)
+    sver = re.search(r'WASI_SDK_FULL\s*=\s*"([\d.]+)"', stext)
+    if not dver or not sver:
+        fail("could not read the WASI SDK version out of the Dockerfile or setup.py")
+    elif dver.group(1) != sver.group(1):
+        fail(f"WASI SDK version drift: Dockerfile says {dver.group(1)}, "
+             f"mpx-cli setup says {sver.group(1)}")
+    else:
+        ok(f"WASI SDK {sver.group(1)} — Dockerfile and `mpx-cli setup` agree")
+else:
+    ok("no Dockerfile or setup.py to compare (skipped)")
+
 section("compile every example, and the init template, for wasm32")
 def _wasm_clang() -> "str | None":
     """The first clang that can actually emit wasm32.

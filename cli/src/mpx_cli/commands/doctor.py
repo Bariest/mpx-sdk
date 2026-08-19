@@ -100,10 +100,7 @@ def cmd_doctor(args: argparse.Namespace) -> None:
             if wrong:
                 _line(WARN, tc.name, "found, but it cannot build skills",
                       wrong[0] + "\n"
-                      "  Install the WASI SDK and point at it:\n"
-                      "    https://github.com/WebAssembly/wasi-sdk/releases\n"
-                      "    setx WASI_CC C:\\wasi-sdk\\bin\\clang.exe      (Windows)\n"
-                      "    export WASI_CC=/opt/wasi-sdk/bin/clang     (Linux/macOS)")
+                      "  mpx-cli setup        installs the right one (~100 MB, once)")
                 continue
             _line(WARN, tc.name, "not found",
                   {"WASI SDK": "For C skills — the usual choice.\n"
@@ -113,7 +110,8 @@ def cmd_doctor(args: argparse.Namespace) -> None:
                    }.get(tc.name, ""))
     if not any_compiler:
         good &= _line(BAD, "no compiler at all", "",
-                      "Nothing can be built. Install one of the above, or use the dev container.")
+                      "Nothing can be built yet. One command fixes it:\n"
+                      "  mpx-cli setup        installs the WASI SDK (~100 MB, once)")
 
     # ── This project ──────────────────────────────────────────────────────
     print("\nProject")

@@ -187,8 +187,13 @@ def _detect_wasi() -> Toolchain:
     machine with ESP-IDF the PATH clang is usually the Xtensa one.
     """
     tc = Toolchain(name="WASI SDK", key="wasi", extensions=[".c", ".cc", ".cpp"])
+    # `mpx-cli setup` puts it here. First, so a toolchain this CLI installed
+    # always beats whatever happens to be on PATH.
+    home = Path(os.environ.get("MPX_HOME", Path.home() / ".mpx"))
+    ours = home / "wasi-sdk" / "bin" / ("clang.exe" if os.name == "nt" else "clang")
     candidates = [
         ("$WASI_CC",                 os.environ.get("WASI_CC")),
+        ("mpx-cli setup",            str(ours)),
         ("/opt/wasi-sdk/bin/clang",  "/opt/wasi-sdk/bin/clang"),
         (r"C:\wasi-sdk\bin\clang.exe", r"C:\wasi-sdk\bin\clang.exe"),
         ("clang on PATH",            shutil.which("clang")),
