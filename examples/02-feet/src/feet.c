@@ -8,6 +8,9 @@
  * built-in movements and inherit the same calibration.
  *
  *     mpx-cli deploy examples/02-feet
+ *
+ *     Based on:  mpx/leg.h       (mpx_foot_to, mpx_frame_send)
+ *                mpx/geometry.h  (the robot's real dimensions)
  */
 #include "mpx.h"
 

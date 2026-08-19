@@ -115,8 +115,8 @@ static inline int  robot_turn_right(int ms)        { return mpx_gait_for(MPX_GAI
 static inline int  robot_strafe_left(int ms)       { return mpx_gait_for(MPX_GAIT_STRAFE_LEFT, ms); }
 static inline int  robot_strafe_right(int ms)      { return mpx_gait_for(MPX_GAIT_STRAFE_RIGHT, ms); }
 static inline int  robot_step_in_place(int ms)     { return mpx_gait_for(MPX_GAIT_STEP, ms); }
-static inline void robot_jump(void)                { mpx_gait_once(MPX_GAIT_JUMP); }
-static inline void robot_front_kick(void)          { mpx_gait_once(MPX_GAIT_FRONT_KICK); }
+static inline void robot_jump(void)                { mpx_gait_for(MPX_GAIT_JUMP, 0); }
+static inline void robot_front_kick(void)          { mpx_gait_for(MPX_GAIT_FRONT_KICK, 0); }
 static inline int  robot_stanford_walk(int ms)     { return mpx_gait_for(MPX_GAIT_TROT, ms); }
 static inline int  robot_wiggle(int ms)            { return mpx_gait_for(MPX_GAIT_WIGGLE, ms); }
 static inline int  robot_butt_shrug(int ms)        { return mpx_gait_for(MPX_GAIT_BUTT_SHRUG, ms); }
@@ -125,10 +125,10 @@ static inline int  robot_bow_back(int ms)          { return mpx_gait_for(MPX_GAI
 
 /* ── Body attitude ───────────────────────────────────────────────────────── */
 static inline void robot_attitude(float r, float p, float y) { mpx_body(r, p, y); }
-static inline void robot_roll (float d)            { mpx_roll(d); }
-static inline void robot_pitch(float d)            { mpx_pitch(d); }
-static inline void robot_yaw  (float d)            { mpx_yaw(d); }
-static inline void robot_reset_attitude(void)      { mpx_gait_stop(); }
+static inline void robot_roll (float d)            { mpx_body(d, 0.0f, 0.0f); }
+static inline void robot_pitch(float d)            { mpx_body(0.0f, d, 0.0f); }
+static inline void robot_yaw  (float d)            { mpx_body(0.0f, 0.0f, d); }
+static inline void robot_reset_attitude(void)      { mpx_gait(MPX_GAIT_NONE); }
 static inline void robot_attitude_speed(float dps) { mpx_body_speed((int)dps); }
 static inline void robot_attitude_speed_xyz(float r, float p, float y)
                                                    { mpx_body_speed_xyz((int)r, (int)p, (int)y); }

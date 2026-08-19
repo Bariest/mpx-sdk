@@ -22,7 +22,9 @@
  *   on             the firmware starts it when the robot is picked up
  *   params         tunable at run time, no rebuild
  *
- *     mpx-cli deploy examples/05-together
+ *     mpx-cli deploy examples/06-together
+ *
+ *     Based on:  all four — mpx/robot.h, mpx/leg.h, mpx/bus.h, mpx/motion.h
  *     mpx-cli movements            # "greet" is now in the list
  *     mpx-cli trace                # watch it level itself
  *     mpx-cli stop                 # the only way a behaviour ends
@@ -83,7 +85,7 @@ MPX_EXPORT void on_start(void)
 
     /* L1 — walk in. No maths, no risk. */
     mpx_walk_speed_set(walk_mm_s);
-    mpx_drive_for(1.0f, 0.0f, 0.0f, 1800);
+    mpx_drive_for(60.0f, 0.0f, 0.0f, 1800);
 
     bow();                                  /* L2 */
     wave();                                 /* L3 */
@@ -91,7 +93,7 @@ MPX_EXPORT void on_start(void)
 
     /* L1 again — come back UP as soon as the low layer has done its job.
      * Staying at layer 4 to walk would mean writing a gait. */
-    mpx_drive_for(-1.0f, 0.0f, 0.0f, 1200);
+    mpx_drive_for(-60.0f, 0.0f, 0.0f, 1200);
     mpx_stand();
 
     /* Now stop being a script and start being a behaviour: 25 Hz, watching

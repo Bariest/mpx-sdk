@@ -8,6 +8,9 @@
  * and only drop a layer when you actually need something this cannot do.
  *
  *     mpx-cli deploy examples/01-gaits
+ *
+ *     Based on:  mpx/robot.h   (the verbs)
+ *                mpx/gaits.h   (the 46 movements, generated from firmware)
  */
 #include "mpx.h"
 
@@ -25,7 +28,7 @@ MPX_EXPORT void on_start(void)
      *   HOLDS   stays in its final pose      — lookup, init
      */
     mpx_gait_for(MPX_GAIT_FORWARD, 2000);   /* a CYCLES gait, so give it a duration */
-    mpx_gait_once(MPX_GAIT_JUMP);           /* a RETURNS gait knows its own length  */
+    mpx_gait_for(MPX_GAIT_JUMP, 0);         /* 0 = the length the catalogue suggests */
 
     mpx_gait(MPX_GAIT_LOOK_UP);             /* a HOLDS gait keeps holding... */
     mpx_sleep(1000);
@@ -37,7 +40,7 @@ MPX_EXPORT void on_start(void)
      * joystick uses.
      */
     mpx_walk_speed_set(40);                 /* mm/s that 1.0 means. Max 200. */
-    mpx_drive_for(1.0f, 0.0f, 0.25f, 2500); /* fwd, strafe, turn — all -1..1 */
+    mpx_drive_for(40.0f, 0.0f, 15.0f, 2500);  /* mm/s, mm/s, deg/s — then stop */
 
     /* Or in real units, if that is what you know: */
     mpx_drive_mm_s(60.0f, 0.0f, 15.0f);     /* mm/s, mm/s, deg/s */
@@ -64,5 +67,5 @@ MPX_EXPORT void on_start(void)
 MPX_EXPORT void on_stop(int reason)
 {
     (void)reason;
-    mpx_gait_stop();
+    mpx_gait(MPX_GAIT_NONE);
 }

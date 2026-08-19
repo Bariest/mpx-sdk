@@ -5,8 +5,18 @@
  * very hard to hurt the robot from this file.
  *
  * Go down to mpx/leg.h when you need to place a specific foot, and to
- * mpx/bus.h when you need to own a motor's control loop. See
- * docs/MOVEMENT.md for which layer owns what.
+ * mpx/bus.h when you need to own a motor's control loop. See docs/MOVEMENT.md
+ * for which layer owns what.
+ *
+ * THE MOVEMENTS THEMSELVES ARE IN mpx/gaits.h — all 46, with a description,
+ * a kind (holds / returns / cycles) and a typical duration each. That file is
+ * GENERATED from the firmware's own table, so the catalogue cannot disagree
+ * with what the robot actually does; this one is written by hand. That is the
+ * only reason they are two files, and mpx.h includes both, so nothing you
+ * write ever has to care.
+ *
+ *     mpx-cli gaits            browse them
+ *     mpx-cli gaits wiggle     search them
  */
 #ifndef MPX_ROBOT_H
 #define MPX_ROBOT_H
@@ -69,8 +79,8 @@ static inline mpx_domain_t mpx_owner(void)
 /** Start a gait and return immediately. It keeps running until you change it. */
 static inline int mpx_gait(mpx_gait_t g) { return robot_gait((int)mpx_gait_name(g)); }
 
-/** Stop whatever gait is running. The robot holds its current pose. */
-static inline int mpx_gait_stop(void) { return robot_gait((int)"none"); }
+/* mpx_gait_stop() was here. It was mpx_gait(MPX_GAIT_NONE) spelled
+ * differently, and a second name for one action is a second thing to learn. */
 
 /** Return to the neutral standing pose and wait for it to settle. */
 static inline int mpx_stand(void)
@@ -80,21 +90,22 @@ static inline int mpx_stand(void)
     return mpx_sleep(800);
 }
 
-/** Start a gait, hold it for `ms`, then stop. Blocks for the duration. */
+/** Start a gait, hold it for `ms`, then stop. Blocks for the duration.
+ *
+ *  Pass ms <= 0 to use the duration the catalogue suggests for that gait,
+ *  which is what mpx_gait_once() used to be. One function with a documented
+ *  zero beats two functions that differ only in where the number came from. */
 static inline int mpx_gait_for(mpx_gait_t g, int ms)
 {
+    if (ms <= 0) {
+        ms = mpx_gait_typical_ms(g);
+        if (ms <= 0) ms = 1500;       /* a cycling gait has no natural length */
+    }
     int rc = mpx_gait(g);
     if (rc != MPX_OK) return rc;
     rc = mpx_sleep(ms);
     if (rc != MPX_OK) return rc;      /* cancelled — do not issue another call */
-    return mpx_gait_stop();
-}
-
-/** As mpx_gait_for(), using the duration the catalogue suggests. */
-static inline int mpx_gait_once(mpx_gait_t g)
-{
-    int ms = mpx_gait_typical_ms(g);
-    return mpx_gait_for(g, ms > 0 ? ms : 1500);
+    return mpx_gait(MPX_GAIT_NONE);
 }
 
 /** Which gait is running, as the firmware's numbering. */
@@ -103,54 +114,56 @@ static inline int mpx_gait_current(void) { return robot_get_mode(); }
 /* ═══════════════════════════════════════════════════════════════════════════
  *  Driving — continuous, analog movement
  *
- *  A gait is a switch: forward, or not forward. Driving is a stick. Each axis
- *  runs -1 to +1 and they combine, so "forward at a third of speed while
- *  turning gently left" is one call:
+ *  A gait is a switch: forward, or not forward. Driving is a stick — the axes
+ *  combine, so "forward at 60 mm/s while turning gently left" is one call:
  *
- *      mpx_drive_at(0.33f, 0.0f, -0.2f);
+ *      mpx_drive_mm_s(60.0f, 0.0f, -15.0f);
  *
- *  This is the same path the robot's own phone UI uses for its thumbsticks.
+ *  REAL UNITS, ONE WAY. There was a second entry point taking -1..+1 on each
+ *  axis, matching the firmware's joystick path. It is gone, because -1..+1 is
+ *  not a self-describing unit: 0.33 means nothing until you know what
+ *  mpx_walk_speed_set() was last set to, possibly by a different skill or by
+ *  the phone. A unit whose meaning lives in global state is the same class of
+ *  problem as a gain that outlives the skill that set it.
+ *
+ *  Stick feel is one multiply away and puts the top speed in your code rather
+ *  than in a global:  mpx_drive_mm_s(joy_y * 150.0f, 0, joy_x * 60.0f);
+ *
  *  Values persist until you change them, so a skill that drives must stop
  *  driving before it ends — mpx_drive_for() does that for you.
- *
- *  How fast "1.0" actually is depends on mpx_walk_speed_set().
  * ═══════════════════════════════════════════════════════════════════════════ */
-
-/** Set the drive vector. fwd/strafe/turn each -1..+1; values persist. */
-static inline int mpx_drive_at(float fwd, float strafe, float turn)
-{
-    return mpx_drive(fwd, strafe, turn);
-}
 
 /** Stop driving. Always call this before your skill ends. */
 static inline int mpx_stop(void) { return mpx_drive_stop(); }
 
-/** Drive for `ms`, then stop. */
-static inline int mpx_drive_for(float fwd, float strafe, float turn, int ms)
-{
-    int rc = mpx_drive(fwd, strafe, turn);
-    if (rc != MPX_OK) return rc;
-    rc = mpx_sleep(ms);
-    mpx_drive_stop();                  /* stop even if we were cancelled */
-    return rc;
-}
-
-/** Top walking speed in mm/s that a drive value of 1.0 means. Clamped 10..200
- *  by the firmware. 200 is genuinely fast; 40-80 looks controlled. */
+/** Top walking speed in mm/s for the NAMED gaits — how fast `advance` walks.
+ *  Clamped 10..200 by the firmware. 200 is genuinely fast; 40-80 looks
+ *  controlled.
+ *
+ *  Note that mpx_drive_mm_s() writes this as a side effect; see there. */
 static inline int mpx_walk_speed_set(int mm_s) { return mpx_set_walk_speed(mm_s); }
 static inline int mpx_walk_speed(void)         { return mpx_get_walk_speed(); }
 
 /** Drive in real units: mm/s forward and sideways, degrees/s of turn.
  *
- *  mpx_drive_at() takes -1..1, which is what a thumbstick produces and what
- *  the firmware's own joystick path expects. That is the right shape for
- *  teleoperation and the wrong shape for a movement you are choreographing,
- *  where "cross the mat at 60 mm/s" is the thing you actually know.
+ *  The only way to drive. "Cross the mat at 60 mm/s" is the thing you actually
+ *  know when choreographing a movement.
  *
- *  This sets the walk speed to the magnitude you asked for and drives at full
- *  deflection, so the number you pass is the number you get. It changes the
- *  walk speed as a side effect -- that setting is global and persists, which
- *  is why it is a separate call rather than the default.
+ *  IT WRITES THE WALK SPEED. The firmware's drive path takes a normalised
+ *  vector scaled by the global walk speed, so expressing a real speed means
+ *  setting that global — this drives at full deflection with the walk speed
+ *  set to the magnitude you asked for, which is why the number you pass is the
+ *  number you get.
+ *
+ *  The side effect is that `advance` afterwards walks at whatever speed you
+ *  last drove at. That is worth knowing rather than worth hiding: restoring it
+ *  automatically would need the SDK to keep state of its own, and hidden state
+ *  is the thing this API keeps getting bitten by. If it matters, save it:
+ *
+ *      const int was = mpx_walk_speed();
+ *      mpx_drive_mm_s(60.0f, 0.0f, 15.0f);
+ *      ... mpx_stop();
+ *      mpx_walk_speed_set(was);
  *
  *  Speeds above MPX_WALK_MAX_MM_S are clamped by the firmware.
  */
@@ -164,6 +177,21 @@ static inline int mpx_drive_mm_s(float fwd_mm_s, float strafe_mm_s, float turn_d
     int rc = mpx_walk_speed_set((int)(mag + 0.5f));
     if (rc != MPX_OK) return rc;
     return mpx_drive(fwd_mm_s / mag, strafe_mm_s / mag, turn_dps / 90.0f);
+}
+
+/** Drive for `ms`, then stop. Same units as mpx_drive_mm_s().
+ *
+ *  Worth its own function rather than three lines at the call site: a drive
+ *  vector PERSISTS, so a skill that forgets the stop leaves the robot walking
+ *  after it has ended. This stops even when the sleep was cancelled. */
+static inline int mpx_drive_for(float fwd_mm_s, float strafe_mm_s,
+                                float turn_dps, int ms)
+{
+    int rc = mpx_drive_mm_s(fwd_mm_s, strafe_mm_s, turn_dps);
+    if (rc != MPX_OK) return rc;
+    rc = mpx_sleep(ms);
+    mpx_drive_stop();                  /* stop even if we were cancelled */
+    return rc;
 }
 
 
@@ -182,10 +210,16 @@ static inline int mpx_body(float roll_deg, float pitch_deg, float yaw_deg)
     return robot_set_body_pose(roll_deg, pitch_deg, yaw_deg);
 }
 
-static inline int mpx_body_level(void) { return robot_set_body_pose(0, 0, 0); }
-static inline int mpx_roll (float deg) { return robot_set_body_pose(deg, 0, 0); }
-static inline int mpx_pitch(float deg) { return robot_set_body_pose(0, deg, 0); }
-static inline int mpx_yaw  (float deg) { return robot_set_body_pose(0, 0, deg); }
+/* mpx_body_level(), mpx_roll(), mpx_pitch() and mpx_yaw() were here. All four
+ * were mpx_body() with zeros in the other slots:
+ *
+ *     mpx_roll(8.0f)   ->  mpx_body(8.0f, 0.0f, 0.0f)
+ *     mpx_pitch(-10.0f)->  mpx_body(0.0f, -10.0f, 0.0f)
+ *     mpx_yaw(15.0f)   ->  mpx_body(0.0f, 0.0f, 15.0f)
+ *     mpx_body_level() ->  mpx_body(0.0f, 0.0f, 0.0f)
+ *
+ * Four names for one call, and the argument order is written on the line
+ * above, so nothing is lost by spelling it out. */
 
 /** Degrees per second for attitude changes. 0 = snap instantly. Persists. */
 static inline int mpx_body_speed(int dps) { return robot_set_attitude_speed(dps); }

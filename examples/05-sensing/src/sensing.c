@@ -13,6 +13,9 @@
  *                  current and its temperature. The robot can feel itself.
  *
  *     mpx-cli deploy examples/05-sensing
+ *
+ *     Based on:  mpx/robot.h  (mpx_imu, mpx_imu_tilt)
+ *                mpx/live.h   (on_tick, overlays, trace)
  *     mpx-cli trace                       # watch it in another terminal
  *
  * TILT THE ROBOT and it stays level. PUSH A FRONT LEG and it yields.

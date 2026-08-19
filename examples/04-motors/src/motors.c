@@ -10,11 +10,16 @@
  * THREE THINGS TO KNOW BEFORE YOU RUN IT:
  *
  *   1. Taking the bus PARKS THE GAIT. You cannot walk while you hold it.
- *   2. Gains PERSIST after you let go — the built-in gaits will use whatever
- *      you left behind. Put them back.
+ *   2. Gains PERSIST on the driver boards after you let go — which is how a
+ *      skill tunes the motors and then lets the firmware's own gait walk with
+ *      that tuning. The sandbox restores them when your skill ends, so you do
+ *      not have to; mpx_gain_save() is how you keep one on purpose.
  *   3. Some parameters are calibration, not gains, and are refused.
  *
  *     mpx-cli deploy examples/04-motors
+ *
+ *     Based on:  mpx/bus.h      (mpx_bus_take, mpx_gain_set, mpx_bus_move)
+ *                mpx/params.h   (the driver-board slots, generated)
  */
 #include "mpx.h"
 
@@ -119,9 +124,14 @@ MPX_EXPORT void on_start(void)
     }
 
     /* ── D. Put it back ──────────────────────────────────────────────────
-     * Gains outlive your skill. Leaving one joint at Kp 95 means every
-     * built-in gait afterwards walks slightly wrong, and nothing on screen
-     * explains why. */
+     * Gains outlive your skill: leaving one joint at Kp 95 would make every
+     * built-in gait afterwards walk slightly wrong with nothing on screen to
+     * explain it. The sandbox restores whatever was there before this skill
+     * ran, on every exit — clean, trapped, or watchdog-killed.
+     *
+     * Doing it here anyway is not wasted. It puts the robot back BEFORE the
+     * mpx_stand() below, rather than after the skill ends, so the stand
+     * happens at the gains you expect. */
     mpx_gains_stock();
     mpx_gain_set(MPX_ALL_JOINTS, MPX_PARAM_MAX_PWM_DUTY_CYCLE, 1.0f);
     mpx_bus_release();
@@ -133,9 +143,9 @@ MPX_EXPORT void on_start(void)
 MPX_EXPORT void on_stop(int reason)
 {
     (void)reason;
-    /* The firmware force-releases the bus when a skill ends, so a crash
-     * cannot leave the gait parked. The GAINS are ours to restore. */
-    mpx_gains_stock();
-    mpx_bus_release();
+    /* Nothing to undo by hand. The sandbox force-releases the bus so a crashed
+     * skill cannot leave the gait parked, clears any overlay, and restores the
+     * gains — the three pieces of state that outlive a module. Leaving the
+     * robot somewhere sensible is still ours. */
     mpx_stand();
 }

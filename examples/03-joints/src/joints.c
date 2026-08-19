@@ -8,6 +8,9 @@
  * into the body if that is what you asked for.
  *
  *     mpx-cli deploy examples/03-joints
+ *
+ *     Based on:  mpx/leg.h    (mpx_joint_to, mpx_frame_send)
+ *                mpx/math.h   (there is no libm in the sandbox)
  */
 #include "mpx.h"
 
