@@ -6,23 +6,41 @@
 
 ## 1. Install
 
-The dev container has everything — Python, the C toolchain, AssemblyScript,
-WABT. Open the folder in VS Code and choose **Reopen in Container**.
-
-Otherwise, Python 3.10+ and:
+Python 3.10+, then two commands:
 
 ```bash
-pip install -e cli
+pip install -e cli          # the CLI
+mpx-cli setup               # the compiler, ~100 MB, once per machine
 ```
 
-Then whichever compiler matches your language. **C is the one to pick** — the
-friendly API is C, and so is every example.
+`setup` installs the **WASI SDK** — the compiler that turns C into
+WebAssembly — into `~/.mpx/wasi-sdk`, and proves it works by compiling
+something before it reports success. You need this even if you already have a
+`clang`: ESP-IDF ships its own, puts it on your PATH, and it has no wasm32
+target, so builds fail with
+
+```
+error: unable to create target: 'No available targets are compatible with
+triple "wasm32-unknown-wasip1"'
+```
+
+which reads like the SDK is broken when the compiler is simply the wrong one.
+
+**C is the language to pick** — the friendly API is C, and so is every example,
+and `setup` covers it completely. The other two are optional and only needed if
+you choose them:
 
 | Language | Needs | Where |
 |---|---|---|
-| **C** | WASI SDK | [releases](https://github.com/WebAssembly/wasi-sdk/releases) → `/opt/wasi-sdk` |
+| **C** | WASI SDK | `mpx-cli setup` |
 | TypeScript | AssemblyScript | `npm install -g assemblyscript` |
 | WAT | WABT | [releases](https://github.com/WebAssembly/wabt/releases) → `/opt/wabt` |
+
+### Or use the container
+
+Open the folder in VS Code and choose **Reopen in Container**. It has all three
+toolchains at the same versions, installed when the image is built, so `setup`
+is not needed there.
 
 ---
 
@@ -79,7 +97,7 @@ problem.
 ## 4. Make it move
 
 ```bash
-mpx-cli init my_move && cd my_move
+mpx-cli init my_move && cd movements/my_move
 mpx-cli deploy
 ```
 

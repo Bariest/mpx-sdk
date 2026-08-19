@@ -139,3 +139,46 @@ def describe_missing(what: str) -> str:
         f"   Either pass the path explicitly, or run this from inside a skill "
         f"project (one created by 'mpx-cli init')."
     )
+
+MOVEMENTS_DIR = "movements"
+
+
+def sdk_checkout(start: Path | None = None) -> Path | None:
+    """The root of an MPX SDK checkout at or above @p start, if we are in one.
+
+    A checkout is recognised by `sdk/include/mpx.h` plus `examples/` — the
+    headers alone are not enough, because a maker may keep a copy of them
+    beside their own project.
+    """
+    here = (start or Path.cwd()).resolve()
+    for directory in (here, *here.parents):
+        if (directory / "sdk" / "include" / "mpx.h").is_file() \
+                and (directory / "examples").is_dir():
+            return directory
+    return None
+
+
+def movements_dir(start: Path | None = None) -> Path | None:
+    """Where new skills go inside an SDK checkout: `<repo>/movements`.
+
+    Skills used to be scaffolded into the repo root, one directory each, next
+    to sdk/ cli/ docs/ examples/ tools/. Three movements in and the root no
+    longer reads as a project — you cannot tell the SDK's own directories from
+    your work, and every one of them shows up untracked in `git status`.
+    """
+    root = sdk_checkout(start)
+    return root / MOVEMENTS_DIR if root else None
+
+
+def find_movement(name: str, start: Path | None = None) -> Path | None:
+    """Resolve a bare skill name to a directory: ./name, movements/name,
+    examples/name. So `mpx-cli deploy my_move` keeps working after the move."""
+    here = (start or Path.cwd()).resolve()
+    cands = [here / name]
+    root = sdk_checkout(here)
+    if root:
+        cands += [root / MOVEMENTS_DIR / name, root / "examples" / name]
+    for c in cands:
+        if (c / MANIFEST_NAME).is_file():
+            return c
+    return None

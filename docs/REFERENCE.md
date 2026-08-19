@@ -130,7 +130,8 @@ Run from inside a skill directory and every path is derived from
 |---|---|
 | `name` | Skill name, e.g. my_wave |
 | `--lang`, `-l` | c (default, and the only one with the friendly API), ts (AssemblyScript) or wat (raw WebAssembly text) |
-| `--dir`, `-d` | Where to put it (default: ./<name>) |
+| `--dir`, `-d` | Where to put it (default: movements/<name> inside an SDK checkout, ./<name> anywhere else) |
+| `--here` | Put it in the current directory instead of movements/ |
 
 ### `mpx-cli build`
 

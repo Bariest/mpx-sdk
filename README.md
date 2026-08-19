@@ -50,12 +50,24 @@ to change a movement, and cannot brick anything from inside a skill.
 ## Get moving
 
 ```bash
-pip install -e cli          # or open this folder in VS Code -> Reopen in Container
+pip install -e cli          # the CLI
+mpx-cli setup               # the compiler — WASI SDK, ~100 MB, once per machine
 mpx-cli doctor              # what is missing, and what to type about it
-mpx-cli init my_move && cd my_move
+mpx-cli init my_move && cd movements/my_move
 mpx-cli deploy
 mpx-cli logs -f
 ```
+
+`mpx-cli setup` is the one you have not seen before. Building a skill means
+compiling C to WebAssembly, which needs the WASI SDK — and if you have ESP-IDF
+installed, the `clang` already on your PATH is the Xtensa one, which has no
+wasm32 target at all. `setup` downloads the right compiler, puts it in
+`~/.mpx/wasi-sdk`, and **verifies it by compiling something** before saying it
+worked. Run it once per machine; it is not needed in the dev container, which
+installs the same version at image build time.
+
+Prefer a container? Open this folder in VS Code and *Reopen in Container* — the
+toolchain is already there and you can skip `setup`.
 
 `doctor` is worth running first every time something is odd. It checks the
 headers, the ABI, your compilers, the project you are standing in, and whether
@@ -186,6 +198,7 @@ this SDK. Please report it rather than forking the firmware.
 
 | | |
 |---|---|
+| `mpx-cli setup` | install the compiler — **once per machine, no Docker needed** |
 | `mpx-cli doctor` | is my setup going to work? **run this first** |
 | `mpx-cli init <name>` | scaffold a skill (`--lang c` / `ts` / `wat`) |
 | **`mpx-cli deploy`** | **build + upload + run** |
@@ -230,6 +243,7 @@ docs/           SETUP, MOVEMENT, WORKFLOW, REFERENCE — plus internals/
 sdk/include/    THE headers. One copy. mpx.h includes them all.
 cli/            mpx-cli
 examples/       01 … 06, in reading order
+movements/      your skills. `mpx-cli init` puts them here, and git ignores them
 sim/            MuJoCo model and runner
 abi/            the ABI, the gait catalogue and the coverage map, machine-readable
 tools/          the generators and the CI checks
@@ -248,7 +262,7 @@ matter.
 | | |
 |---|---|
 | Firmware | **ABI v4** — see [docs/internals/flashing.md](docs/internals/flashing.md) |
-| Toolchain | WASI SDK for C; AssemblyScript for TS; WABT for WAT. All in the dev container. |
+| Toolchain | WASI SDK for C — `mpx-cli setup` installs it, or use the dev container. AssemblyScript for TS, WABT for WAT: both optional. |
 | Skill limits | 256 KB module, 128 KB memory, one at a time |
 | Run time | 60 s — **unless** the manifest says `"behaviour": true` |
 | Tick rate | 10–1000 ms; three overruns stops the loop |

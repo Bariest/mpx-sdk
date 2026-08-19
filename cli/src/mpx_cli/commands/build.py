@@ -11,7 +11,8 @@ from mpx_cli.sdk.toolchain import (
     validate_wasm,
 )
 from mpx_cli.sdk.section import embed
-from mpx_cli.sdk.project import MANIFEST_NAME, describe_missing, find_project
+from mpx_cli.sdk.project import (MANIFEST_NAME, describe_missing, find_project,
+                                 find_movement)
 from mpx_cli.sdk.toolchain import sdk_include_dir
 import json
 
@@ -95,6 +96,15 @@ def _resolve_source(args: argparse.Namespace) -> tuple[Path, "object | None"]:
     """
     if args.source:
         given = Path(args.source)
+
+        # A BARE NAME resolves against movements/ and examples/ too, so
+        # `mpx-cli deploy my_move` from the repo root keeps working now that
+        # init scaffolds into movements/ instead of the root. Only when the
+        # name is not already a directory here, so ./name always wins.
+        if not given.exists() and given.parent == Path("."):
+            found = find_movement(given.name)
+            if found is not None:
+                given = found
 
         if given.is_dir():
             # Deliberately not find_project(given): that walks *up*, so

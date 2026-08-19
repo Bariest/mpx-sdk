@@ -20,6 +20,7 @@ import json
 from pathlib import Path
 
 from mpx_cli.sdk.toolchain import detect_all, sdk_include_dir
+from mpx_cli.sdk.project import movements_dir
 
 _RES = Path(__file__).resolve().parent / "resource"
 
@@ -56,20 +57,49 @@ def add_init_parser(sub: argparse._SubParsersAction) -> None:
                    help="c (default, and the only one with the friendly API), "
                         "ts (AssemblyScript) or wat (raw WebAssembly text)")
     p.add_argument("--dir", "-d", default=None,
-                   help="Where to put it (default: ./<name>)")
+                   help="Where to put it (default: movements/<name> inside an "
+                        "SDK checkout, ./<name> anywhere else)")
+    p.add_argument("--here", action="store_true",
+                   help="Put it in the current directory instead of movements/")
 
 
 def cmd_init(args: argparse.Namespace) -> None:
     name = args.name
     lang = args.lang
     ext = EXT[lang]
-    out = Path(args.dir) if args.dir else Path(name)
+    # Inside an SDK checkout, movements/ keeps your work in one place instead
+    # of scattering it through the repo root alongside sdk/ cli/ docs/ tools/.
+    # Outside one — a maker's own directory — ./<name> is still right.
+    if args.dir:
+        out = Path(args.dir)
+    elif getattr(args, "here", False):
+        out = Path(name)
+    else:
+        mv = movements_dir()
+        out = (mv / name) if mv else Path(name)
 
     if out.exists():
         print(f"error: '{out}' already exists")
         return
 
-    print(f"Creating skill '{name}' in {out}/\n")
+    try:
+        shown = out.resolve().relative_to(Path.cwd().resolve())
+    except ValueError:
+        shown = out
+    print(f"Creating skill '{name}' in {shown}/\n")
+
+    # A movements/ directory the SDK repo does not track. Your skills are
+    # yours; they should not turn up as untracked noise in `git status`, and
+    # they should not be committed into the SDK by accident either.
+    if out.parent.name == "movements" and not (out.parent / ".gitignore").exists():
+        out.parent.mkdir(parents=True, exist_ok=True)
+        (out.parent / ".gitignore").write_text(
+            "# Your movements live here. They are your work, not part of the\n"
+            "# SDK, so this checkout ignores everything in this directory --\n"
+            "# including this file, which is why `movements/` never appears in\n"
+            "# `git status` at all. Keep your skills in their own repo, or\n"
+            "# `git add -f` if you really do want them committed here.\n"
+            "*\n", encoding="utf-8")
 
     # ── source ────────────────────────────────────────────────────────────
     template = (_RES / f"skill.{ext}.template").read_text(encoding="utf-8")
@@ -152,7 +182,7 @@ clean:    ; rm -rf build
 
     print(f"""
 Next:
-  cd {out}
+  cd {shown}
   mpx-cli deploy          build, upload and run
   mpx-cli logs -f         watch it
 
