@@ -84,11 +84,36 @@ static inline mpx_joint_t mpx_joint(mpx_leg_t leg, mpx_part_t part)
     return (mpx_joint_t)((int)leg * 3 + (int)part + 1);
 }
 
+/** Pass instead of a joint to mean "all twelve".
+ *
+ *  This replaces an entire family. There used to be mpx_gains_all,
+ *  mpx_current_all, mpx_max_effort_all and mpx_bus_relax_all — four names, and
+ *  four chances to find that the one you wanted did not exist. One sentinel
+ *  covers all of them and every future one, and it reads at the call site as
+ *  what it is:
+ *
+ *      mpx_gain_set(MPX_ALL_JOINTS, MPX_PARAM_KP_POSITION, 65.0f);
+ *
+ *  Zero, because joints are 1..12 and zero was never a joint. */
+#define MPX_ALL_JOINTS ((mpx_joint_t)0)
+
 /* Link lengths, joint limits and hip positions live in mpx/geometry.h, which
  * is generated from the firmware's own kinematics headers. Do not redefine
- * them here: this file used to carry MPX_CALF_MM 56.0f while the firmware
- * said 60.0f, and a 4 mm error in a link length is invisible until the foot
- * lands somewhere you did not ask for. */
+ * them here: a 4 mm error in a link length is invisible until the foot lands
+ * somewhere you did not ask for.
+ *
+ * ONE CAVEAT, AND IT IS REAL. The firmware carries TWO leg models:
+ *
+ *   Stanford exact IK   stanford_kinematics.h, SK_L2 = 60 mm
+ *                       -> the built-in gaits, and what geometry.h reports
+ *   planar IK           robot.cc calculate_ik, L2 = 56 mm
+ *                       -> what mpx_foot_to() below actually calls
+ *
+ * So MPX_CALF_MM is right for the walking gaits and 4 mm long for foot
+ * placement. It matters in one place: reach. MPX_REACH_MM is 110, but the
+ * planar IK straightens at 106 and clamps its cos() argument beyond that
+ * rather than failing — the foot stops moving out while your numbers keep
+ * growing. Stay inside ~100 mm from the hip and the difference never shows. */
 
 /* ═══════════════════════════════════════════════════════════════════════════
  *  Feet — you place, the firmware solves
@@ -96,12 +121,55 @@ static inline mpx_joint_t mpx_joint(mpx_leg_t leg, mpx_part_t part)
  *      x      mm, forward positive, back negative
  *      splay  degrees, sideways swing at the hip
  *      z      mm, measured DOWN from the hip, so it is negative.
- *             About -78 is standing; less negative is a crouch.
+ *             MPX_STAND_Z_MM (-70) is standing; less negative is a crouch.
  * ═══════════════════════════════════════════════════════════════════════════ */
+
+/** Place one foot. z is UP-positive, so a foot below its hip is negative.
+ *
+ *  THE SIGN IS FLIPPED HERE, ON PURPOSE, AND THIS IS THE ONLY PLACE IT HAPPENS.
+ *
+ *  The firmware's planar IK (robot.cc, calculate_ik) takes z as DISTANCE DOWN,
+ *  positive: its own idle loop calls front_right_ik(0, 0, +70) to stand. The
+ *  SDK says z is up-positive everywhere else — geometry.h, motion.h, every
+ *  example — so one of the two has to convert, and it is cheaper to do it at
+ *  this boundary than to carry two conventions through four layers.
+ *
+ *  This used to pass z straight through, which meant every foot call asked for
+ *  a pose 180 degrees from the one written. atan2(x, zd) flips by pi when zd
+ *  goes negative, so mpx_feet_stand() at z = -70 resolved to servo2 = servo3 =
+ *  -180 and then clamped at the joint limit. It did not error and it did not
+ *  warn; the legs just went somewhere else.
+ *
+ *  mpx/abi.h's robot_ik_fr() and friends are the raw host imports and still
+ *  speak the firmware's convention. That is what "raw" means there.
+ */
+typedef struct {
+    float x;      /**< mm, forward positive.                       */
+    float splay;  /**< degrees, sideways at the hip.               */
+    float z;      /**< mm, UP positive, so below the hip is negative. */
+} mpx_footpos_t;
+
+/* Where this skill last put each foot.
+ *
+ * This is what lets mpx_foot_move() below take a speed without you handing it
+ * a starting point. It is safe to keep here because a skill is exactly ONE
+ * source file — mpx-cli compiles a single <slug>.c — so there is exactly one
+ * copy of this, not one per translation unit.
+ *
+ * It starts at the standing pose because that is where a skill starts. If a
+ * built-in gait has been walking the robot around since, call mpx_feet_to()
+ * once to say where the feet are before asking for a move at a speed. */
+static __attribute__((unused)) mpx_footpos_t mpx_foot_last_[4] = {
+    { 0.0f, 0.0f, MPX_STAND_Z_MM }, { 0.0f, 0.0f, MPX_STAND_Z_MM },
+    { 0.0f, 0.0f, MPX_STAND_Z_MM }, { 0.0f, 0.0f, MPX_STAND_Z_MM },
+};
 
 static inline int mpx_foot_to(mpx_leg_t leg, float x_mm, float splay_deg, float z_mm)
 {
-    return mpx_foot((int)leg, x_mm, splay_deg, z_mm);
+    mpx_foot_last_[leg].x     = x_mm;
+    mpx_foot_last_[leg].splay = splay_deg;
+    mpx_foot_last_[leg].z     = z_mm;
+    return mpx_foot((int)leg, x_mm, splay_deg, -z_mm);
 }
 
 /** Put all four feet in the same place relative to their own hips. */
@@ -109,7 +177,7 @@ static inline int mpx_feet_to(float x_mm, float splay_deg, float z_mm)
 {
     int rc, worst = MPX_OK;
     for (int l = 0; l < 4; ++l) {
-        rc = mpx_foot((int)l, x_mm, splay_deg, z_mm);
+        rc = mpx_foot_to((mpx_leg_t)l, x_mm, splay_deg, z_mm);   /* one sign flip, in one place */
         if (rc != MPX_OK) worst = rc;
     }
     return worst;
@@ -136,27 +204,30 @@ static inline int mpx_joint_to(mpx_joint_t j, float deg)
 
 /** Read one joint back, in degrees relative to centre.
  *
- *  This is the reading that matches mpx_joint_to(). To close a loop, use this
- *  one — and only this one. mpx_joint_raw() below is in the opposite frame,
- *  and an error term computed across the two has the wrong sign, so the loop
- *  drives away from the target instead of towards it. */
+ *  THE reading. Same frame as mpx_joint_to(), so an error term across the two
+ *  has the right sign and a control loop converges.
+ *
+ *  There used to be an mpx_joint_raw() next to this, returning the driver
+ *  board's 0..1023 in the ABSOLUTE frame. Two functions named alike, one line
+ *  apart, differing invisibly in FRAME — and a loop built on the wrong one
+ *  drives away from its target instead of towards it. Three separate pages of
+ *  documentation existed to warn people off it and nothing in the SDK ever
+ *  called it. A footgun that needs three warnings is not a feature.
+ *
+ *  The capability is not lost: robot_read_position() is in mpx/abi.h, with the
+ *  raw host imports, where reaching for it is a deliberate act. */
 static inline float mpx_joint_at(mpx_joint_t j)
 {
     return (float)robot_read_angle_cdeg((int)j) * 0.01f;
 }
 
-/** Raw driver-board position, 0..1023, in the ABSOLUTE frame. For diagnostics
- *  and for talking to Servo Studio. Not for closing a loop — see above. */
-static inline int mpx_joint_raw(mpx_joint_t j) { return robot_read_position((int)j); }
+/* Looking for mpx_joint_speed()? There is no speed register on this robot, so
+ * it never did anything and is gone. mpx_joint_move() and mpx_foot_move()
+ * below are the real thing. mpx_body_speed() in mpx/robot.h is a genuine
+ * deg/s limit: body attitude is slewed by the firmware's gait task, which is
+ * not the servo bus.
+ */
 
-/** How fast a joint travels to its target. 0 = as fast as it can. */
-static inline int mpx_joint_speed(mpx_joint_t j, int speed)
-{
-    return robot_set_servo_speed((int)j, speed);
-}
-
-/** Travel speed for every joint at once. */
-static inline int mpx_joints_speed(int speed) { return mpx_set_all_servo_speed(speed); }
 
 /* ═══════════════════════════════════════════════════════════════════════════
  *  Sending a frame
@@ -173,6 +244,156 @@ static inline int mpx_ticker_wait(mpx_ticker_t *t)
     if (rc != MPX_OK) return rc;
     t->frame++;
     return mpx_sleep_to(t->start_ms + t->frame * t->period_ms);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ *  Moving at a speed
+ *
+ *  There is no speed register on this robot. The SPI frame to the driver
+ *  boards carries { mode, position, torque, kp, kd } and nothing else, so a
+ *  joint always drives as hard as its position loop asks. That is why a plain
+ *  mpx_joint_to() or mpx_foot_to() is ALWAYS full speed: it creates the whole
+ *  error at once and the motor spends everything closing it.
+ *
+ *  A slower move is the same command fed in gradually. These two write that
+ *  loop for you. They are the calls you already know with one more argument:
+ *
+ *      mpx_foot_to  (MPX_FR, 30.0f, 0.0f, -50.0f);          now
+ *      mpx_foot_move(MPX_FR, 30.0f, 0.0f, -50.0f, 40.0f);   at 40 mm/s
+ *
+ *      mpx_joint_to  (MPX_FR_KNEE, -25.0f);                 now (then send)
+ *      mpx_joint_move(MPX_FR_KNEE, -25.0f, 60.0f);          at 60 deg/s
+ *
+ *  They BLOCK until the move is done and send their own frames, so they do not
+ *  belong inside a frame loop — they replace one. A speed of 0 means as fast
+ *  as it goes, which is exactly the _to version.
+ *
+ *  For choreography — several waypoints, custom easing, four feet on their own
+ *  paths — use mpx/motion.h, which works in times rather than speeds because
+ *  that is what makes separate limbs land together.
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+/** Milliseconds to cover `travel` at `per_s`, floored at one frame.
+ *  0 or less means instant, and the callers apply the target in one frame. */
+static inline int mpx_move_ms_(float travel, float per_s)
+{
+    int ms;
+    if (per_s <= 0.0f) return 0;
+    ms = (int)(travel / per_s * 1000.0f);
+    return ms < 20 ? 20 : ms;
+}
+
+/** Move one foot to (x, splay, z) at `mm_s` millimetres per second.
+ *
+ *  Starts from wherever this skill last put that foot. Splay is degrees at the
+ *  hip, so it is measured as the arc the foot actually sweeps — a 10 degree
+ *  swing at standing height is 15 mm of travel, not "10" of anything. */
+static inline int mpx_foot_move(mpx_leg_t leg, float x_mm, float splay_deg,
+                                float z_mm, float mm_s)
+{
+    mpx_footpos_t a = mpx_foot_last_[leg];
+    float dx  = x_mm - a.x;
+    float dz  = z_mm - a.z;
+    float rad = 0.5f * (mpx_abs(a.z) + mpx_abs(z_mm));
+    float ds  = mpx_rad(splay_deg - a.splay) * rad;
+    int   ms  = mpx_move_ms_(mpx_sqrt(dx * dx + dz * dz + ds * ds), mm_s);
+    mpx_ticker_t t;
+
+    if (ms == 0) {
+        int rc = mpx_foot_to(leg, x_mm, splay_deg, z_mm);
+        return rc != MPX_OK ? rc : mpx_frame_send();
+    }
+
+    t = mpx_ticker(50);
+    for (;;) {
+        unsigned e = mpx_ticker_elapsed(&t);
+        float    f = e >= (unsigned)ms ? 1.0f : (float)e / (float)ms;
+        float    k = mpx_ease(MPX_EASE_INOUT, f);
+        int      rc;
+
+        mpx_foot_to(leg, mpx_lerp(a.x, x_mm, k),
+                         mpx_lerp(a.splay, splay_deg, k),
+                         mpx_lerp(a.z, z_mm, k));
+        rc = mpx_ticker_wait(&t);           /* sends the frame, then sleeps */
+        if (rc != MPX_OK) return rc;
+        if (mpx_ticker_elapsed(&t) >= (unsigned)ms) break;
+    }
+    mpx_foot_to(leg, x_mm, splay_deg, z_mm);   /* land exactly on it */
+    return mpx_frame_send();
+}
+
+/** Move all four feet to the same place at `mm_s`, arriving together. */
+static inline int mpx_feet_move(float x_mm, float splay_deg, float z_mm, float mm_s)
+{
+    float worst = 0.0f;
+    int   l, ms;
+    mpx_footpos_t a[4];
+    mpx_ticker_t  t;
+
+    for (l = 0; l < 4; ++l) {
+        float dx, dz, rad, ds, d;
+        a[l] = mpx_foot_last_[l];
+        dx   = x_mm - a[l].x;
+        dz   = z_mm - a[l].z;
+        rad  = 0.5f * (mpx_abs(a[l].z) + mpx_abs(z_mm));
+        ds   = mpx_rad(splay_deg - a[l].splay) * rad;
+        d    = mpx_sqrt(dx * dx + dz * dz + ds * ds);
+        if (d > worst) worst = d;           /* the furthest foot sets the clock */
+    }
+    ms = mpx_move_ms_(worst, mm_s);
+
+    if (ms == 0) {
+        int rc = mpx_feet_to(x_mm, splay_deg, z_mm);
+        return rc != MPX_OK ? rc : mpx_frame_send();
+    }
+
+    t = mpx_ticker(50);
+    for (;;) {
+        unsigned e = mpx_ticker_elapsed(&t);
+        float    f = e >= (unsigned)ms ? 1.0f : (float)e / (float)ms;
+        float    k = mpx_ease(MPX_EASE_INOUT, f);
+        int      rc;
+
+        for (l = 0; l < 4; ++l)
+            mpx_foot_to((mpx_leg_t)l, mpx_lerp(a[l].x, x_mm, k),
+                                      mpx_lerp(a[l].splay, splay_deg, k),
+                                      mpx_lerp(a[l].z, z_mm, k));
+        rc = mpx_ticker_wait(&t);
+        if (rc != MPX_OK) return rc;
+        if (mpx_ticker_elapsed(&t) >= (unsigned)ms) break;
+    }
+    mpx_feet_to(x_mm, splay_deg, z_mm);
+    return mpx_frame_send();
+}
+
+/** Move one joint to `deg` at `dps` degrees per second.
+ *
+ *  Starts from the MEASURED angle, so it is honest about where the joint
+ *  really is — one bus read, which is nothing next to the move itself. */
+static inline int mpx_joint_move(mpx_joint_t j, float deg, float dps)
+{
+    float from = mpx_joint_at(j);
+    int   ms   = mpx_move_ms_(mpx_abs(deg - from), dps);
+    mpx_ticker_t t;
+
+    if (ms == 0) {
+        int rc = mpx_joint_to(j, deg);
+        return rc != MPX_OK ? rc : mpx_frame_send();
+    }
+
+    t = mpx_ticker(50);
+    for (;;) {
+        unsigned e = mpx_ticker_elapsed(&t);
+        float    f = e >= (unsigned)ms ? 1.0f : (float)e / (float)ms;
+        int      rc;
+
+        mpx_joint_to(j, mpx_lerp(from, deg, mpx_ease(MPX_EASE_INOUT, f)));
+        rc = mpx_ticker_wait(&t);
+        if (rc != MPX_OK) return rc;
+        if (mpx_ticker_elapsed(&t) >= (unsigned)ms) break;
+    }
+    mpx_joint_to(j, deg);
+    return mpx_frame_send();
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════

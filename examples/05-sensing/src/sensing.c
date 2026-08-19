@@ -99,10 +99,12 @@ MPX_EXPORT void on_start(void)
     mpx_stand();
 
     /* ── D. Closing a loop, correctly ────────────────────────────────────
-     * The gotcha worth remembering: mpx_joint_at() reads back in the SAME
-     * frame mpx_joint_to() writes. The raw reading underneath runs the
-     * OPPOSITE way, so a loop built on mpx_joint_raw() makes the error term
-     * the wrong sign and diverges instead of converging — silently, fast. */
+     * mpx_joint_at() reads back in the SAME frame mpx_joint_to() writes, so
+     * the error term below has the right sign. The driver board's own raw
+     * reading runs the OPPOSITE way; the SDK used to wrap it one line away
+     * from this one, which made "diverges instead of converging, silently and
+     * fast" an easy mistake to make. It is now only in mpx/abi.h, where
+     * reaching for it is a deliberate act. */
     MPX_LOG("D — closing a loop on measured angle");
     mpx_take(MPX_OWN_JOINTS);
 

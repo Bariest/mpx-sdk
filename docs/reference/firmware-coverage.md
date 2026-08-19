@@ -13,9 +13,9 @@ So this page is **generated and enforced**. `tools/gen_coverage.py` reads
 fails the build if the firmware grows a function nobody has classified. CI runs
 it on every push.
 
-**40 of 47 firmware functions are reachable from a skill.**
+**38 of 47 firmware functions are reachable from a skill.**
 5 are boot-time or sandbox plumbing with no meaning inside a
-skill. 2 are withheld on purpose, with the reason written down
+skill. 4 are withheld on purpose, with the reason written down
 below rather than left to be rediscovered.
 
 
@@ -25,7 +25,7 @@ Movements the firmware already knows.
 
 | Firmware | Call it from a skill with | |
 |---|---|---|
-| `robot::send_gait_cmd()` | `mpx_gait()` · `mpx_gait_for()` · `mpx_gait_play()` |  |
+| `robot::send_gait_cmd()` | `mpx_gait()` · `mpx_gait_for()` · `mpx_gait_once()` · `mpx_gait_play()` |  |
 | `robot::current_gait_cmd()` | `mpx_gait_current()` |  |
 | `robot::get_config()` | `mpx_gait_config()` · `mpx_walk_speed()` |  |
 | `robot::set_config()` | `mpx_gait_config_set()` · `mpx_walk_speed_set()` |  |
@@ -39,7 +39,7 @@ Steering by velocity rather than by name.
 
 | Firmware | Call it from a skill with | |
 |---|---|---|
-| `robot::joy_input()` | `mpx_drive_mm_s()` · `mpx_drive_for()` · `mpx_stop()` |  |
+| `robot::joy_input()` | `mpx_drive_at()` · `mpx_drive_for()` · `mpx_drive_mm_s()` · `mpx_stop()` |  |
 
 ### Body attitude
 
@@ -47,7 +47,7 @@ Roll, pitch and yaw with the feet planted.
 
 | Firmware | Call it from a skill with | |
 |---|---|---|
-| `robot::set_body_attitude()` | `mpx_body()` · `mpx_body_to()` |  |
+| `robot::set_body_attitude()` | `mpx_body()` · `mpx_body_to()` · `mpx_body_level()` · `mpx_pitch()` |  |
 | `robot::set_attitude_speed()` | `mpx_body_speed()` |  |
 | `robot::set_attitude_speed_xyz()` | `mpx_body_speed_xyz()` |  |
 
@@ -79,8 +79,6 @@ Direct joint angles; you solve the leg.
 | Firmware | Call it from a skill with | |
 |---|---|---|
 | `robot::set_servo_angle()` | `mpx_joint_to()` · `mpx_pose_set()` |  |
-| `robot::set_servo_speed()` | `mpx_joint_speed()` |  |
-| `robot::set_all_servo_speed()` | `mpx_joints_speed()` |  |
 | `robot::flush()` | `mpx_frame_send()` · `mpx_pose_apply()` · `mpx_stance_apply()` |  |
 
 ### Servo bus
@@ -100,7 +98,7 @@ Reading the robot back.
 | Firmware | Call it from a skill with | |
 |---|---|---|
 | `robot::read_angle_cdeg()` | `mpx_joint_at()` |  |
-| `robot::read_position()` | `mpx_joint_raw()` | Raw 0-1023 in the absolute frame. mpx_joint_at() is what you want for a control loop. |
+| `robot::read_position()` | `robot_read_position()` | Raw 0-1023 in the ABSOLUTE frame. Deliberately has no mpx_ wrapper: mpx_joint_at() is the reading that matches mpx_joint_to(), and a wrapper next to it invited loops built across the two frames. Reachable as robot_read_position() from mpx/abi.h for diagnostics. |
 | `robot::read_speed()` | `robot_read_speed()` |  |
 | `robot::read_load()` | `robot_read_load()` |  |
 | `robot::read_voltage()` | `robot_read_voltage()` |  |
@@ -124,6 +122,10 @@ Per-joint zero offsets.
 
 ## Withheld on purpose
 
+**`robot::set_servo_speed()`** — Dead in the firmware. The driver boards' SPI frame has no speed field — robot::flush() builds it from position plus a fixed current cap and never reads goal_speed. The SDK used to wrap this as mpx_joint_speed(); it returned MPX_OK and changed nothing, which is worse than not existing. Move a joint at a chosen speed by stepping mpx_joint_to() on a ticker.
+
+**`robot::set_all_servo_speed()`** — Dead in the firmware. The driver boards' SPI frame has no speed field — robot::flush() builds it from position plus a fixed current cap and never reads goal_speed. The SDK used to wrap this as mpx_joint_speed(); it returned MPX_OK and changed nothing, which is worse than not existing. Move a joint at a chosen speed by stepping mpx_joint_to() on a ticker.
+
 **`robot::set_studio_mode()`** — Servo Studio is the human-in-the-loop calibration tool. A skill silently putting the robot into Studio mode would take the bus away from a person who is watching a joint move. Use the robot's web UI.
 
 **`robot::studio_mode()`** — Paired with set_studio_mode. A skill that needs to know whether it may touch the bus should call mpx_bus_take() and read the return code.
@@ -142,4 +144,5 @@ Forgetting `mpx_bus_release()` leaves the robot recoverable.
 Open an issue naming the firmware function. If the firmware can do it and the
 SDK cannot, that is a bug in the SDK — not a reason to fork the firmware.
 
-See also: [the API reference](../REFERENCE.md) · [movement](../MOVEMENT.md)
+See also: [reference](../REFERENCE.md) ·
+[how motion works](../MOVEMENT.md)

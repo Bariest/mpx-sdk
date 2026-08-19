@@ -137,8 +137,10 @@ static inline void robot_attitude_at(float r, float p, float y, float dps)
 
 /* ── Joints ──────────────────────────────────────────────────────────────── */
 static inline int  robot_set_servo_deg(mpx_joint_t j, float deg) { return mpx_joint_to(j, deg); }
+/* `speed` is accepted and ignored: the driver boards have no speed field and
+   the firmware never sent this value anywhere. See the note in mpx/leg.h. */
 static inline void robot_set_servo(mpx_joint_t j, float deg, int speed)
-                                                   { mpx_joint_speed(j, speed); mpx_joint_to(j, deg); }
+                                                   { (void)speed; mpx_joint_to(j, deg); }
 
 /* ── Config ──────────────────────────────────────────────────────────────── */
 typedef struct { int period, height, up_height, stride, tilt; } robot_config_t;

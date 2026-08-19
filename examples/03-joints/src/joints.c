@@ -11,6 +11,8 @@
  *
  *     Based on:  mpx/leg.h    (mpx_joint_to, mpx_frame_send)
  *                mpx/math.h   (there is no libm in the sandbox)
+ *                mpx/leg.h    (mpx_joint_move — mpx_joint_to plus a speed)
+ *                mpx/motion.h (poses, when joints must move together)
  */
 #include "mpx.h"
 
@@ -83,6 +85,35 @@ MPX_EXPORT void on_start(void)
         mpx_trace_f("error", error);        /* mpx-cli trace, to watch it settle */
         mpx_sleep(40);
     }
+
+    /* ── D. Naming the SPEED instead of writing the loop ─────────────────
+     * Look at what B and C did: nudge the target, send, sleep 16 ms, repeat.
+     * That IS speed here. THERE IS NO SPEED REGISTER — the frame to the driver
+     * boards carries { mode, position, torque, kp, kd } and nothing else, so a
+     * joint always drives as hard as its position loop asks. A bare
+     * mpx_joint_to() is always full speed: the whole error appears at once and
+     * the motor spends everything closing it.
+     *
+     * mpx_joint_move() is mpx_joint_to() with the speed you want. It reads
+     * where the joint actually is, works out the time, runs the loop, and
+     * sends its own frames — so it replaces a loop, it does not go inside one. */
+    mpx_joint_move(MPX_FR_KNEE, -25.0f, 60.0f);   /* 60 deg/s */
+    mpx_joint_move(MPX_FR_KNEE,   0.0f, 60.0f);   /* back, same speed */
+
+    mpx_joint_move(MPX_FR_SHOULDER, 20.0f, 15.0f);  /* slow and deliberate */
+    mpx_joint_move(MPX_FR_SHOULDER,  0.0f,  0.0f);  /* 0 = as fast as it goes */
+
+    /* WHEN THIS IS THE WRONG TOOL. Two mpx_joint_move() calls run one after
+     * the other, so the shoulder finishes before the knee starts. When joints
+     * must move TOGETHER — which is most of a leg — you want one motion over a
+     * shared time, and that is mpx/motion.h:
+     *
+     *     mpx_pose_t here = mpx_pose_now();
+     *     mpx_pose_t bent = mpx_pose_with(here, MPX_FR_KNEE, -25.0f);
+     *     mpx_pose_glide(here, bent, 1200, MPX_EASE_INOUT);
+     *
+     * That is the whole rule. One thing moving: a speed. Several things that
+     * must land together: a time. */
 
     mpx_release();
     mpx_stand();

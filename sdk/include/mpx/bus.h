@@ -91,19 +91,6 @@ static inline int mpx_bus_held(void)    { return servo_is_locked(); }
 #define MPX_KP_CURRENT_STOCK    0.0006f   /* current P — note the scale       */
 #define MPX_KFF_CURRENT_STOCK   0.00022f  /* current feed-forward             */
 
-/** Pass instead of a joint to mean "all twelve".
- *
- *  This replaces an entire family. There used to be mpx_gains_all,
- *  mpx_current_all, mpx_max_effort_all and mpx_bus_relax_all — four names, and
- *  four chances to find that the one you wanted did not exist. One sentinel
- *  covers all of them and every future one, and it reads at the call site as
- *  what it is:
- *
- *      mpx_gain_set(MPX_ALL_JOINTS, MPX_PARAM_KP_POSITION, 65.0f);
- *
- *  Zero, because joints are 1..12 and zero was never a joint. */
-#define MPX_ALL_JOINTS ((mpx_joint_t)0)
-
 /** Set one parameter on one joint — or on all twelve with MPX_ALL_JOINTS.
  *
  *  THIS IS THE WHOLE GAIN API. There were five more functions wrapping it

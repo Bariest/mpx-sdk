@@ -13,9 +13,9 @@ So this page is **generated and enforced**. `tools/gen_coverage.py` reads
 fails the build if the firmware grows a function nobody has classified. CI runs
 it on every push.
 
-**40 of 47 firmware functions are reachable from a skill.**
+**38 of 47 firmware functions are reachable from a skill.**
 5 are boot-time or sandbox plumbing with no meaning inside a
-skill. 2 are withheld on purpose, with the reason written down
+skill. 4 are withheld on purpose, with the reason written down
 below rather than left to be rediscovered.
 
 
@@ -79,8 +79,6 @@ Direct joint angles; you solve the leg.
 | Firmware | Call it from a skill with | |
 |---|---|---|
 | `robot::set_servo_angle()` | `mpx_joint_to()` · `mpx_pose_set()` |  |
-| `robot::set_servo_speed()` | `mpx_joint_speed()` |  |
-| `robot::set_all_servo_speed()` | `mpx_joints_speed()` |  |
 | `robot::flush()` | `mpx_frame_send()` · `mpx_pose_apply()` · `mpx_stance_apply()` |  |
 
 ### Servo bus
@@ -100,7 +98,7 @@ Reading the robot back.
 | Firmware | Call it from a skill with | |
 |---|---|---|
 | `robot::read_angle_cdeg()` | `mpx_joint_at()` |  |
-| `robot::read_position()` | `mpx_joint_raw()` | Raw 0-1023 in the absolute frame. mpx_joint_at() is what you want for a control loop. |
+| `robot::read_position()` | `robot_read_position()` | Raw 0-1023 in the ABSOLUTE frame. Deliberately has no mpx_ wrapper: mpx_joint_at() is the reading that matches mpx_joint_to(), and a wrapper next to it invited loops built across the two frames. Reachable as robot_read_position() from mpx/abi.h for diagnostics. |
 | `robot::read_speed()` | `robot_read_speed()` |  |
 | `robot::read_load()` | `robot_read_load()` |  |
 | `robot::read_voltage()` | `robot_read_voltage()` |  |
@@ -123,6 +121,10 @@ Per-joint zero offsets.
 | `robot::reset_offsets()` | `mpx_offsets_reset()` |  |
 
 ## Withheld on purpose
+
+**`robot::set_servo_speed()`** — Dead in the firmware. The driver boards' SPI frame has no speed field — robot::flush() builds it from position plus a fixed current cap and never reads goal_speed. The SDK used to wrap this as mpx_joint_speed(); it returned MPX_OK and changed nothing, which is worse than not existing. Move a joint at a chosen speed by stepping mpx_joint_to() on a ticker.
+
+**`robot::set_all_servo_speed()`** — Dead in the firmware. The driver boards' SPI frame has no speed field — robot::flush() builds it from position plus a fixed current cap and never reads goal_speed. The SDK used to wrap this as mpx_joint_speed(); it returned MPX_OK and changed nothing, which is worse than not existing. Move a joint at a chosen speed by stepping mpx_joint_to() on a ticker.
 
 **`robot::set_studio_mode()`** — Servo Studio is the human-in-the-loop calibration tool. A skill silently putting the robot into Studio mode would take the bus away from a person who is watching a joint move. Use the robot's web UI.
 

@@ -78,6 +78,40 @@ Three facts. Get these and the API stops looking arbitrary.
 **x** forward · **y** left · **z** up — so a foot below its hip is a *negative*
 z. About −70 mm is standing.
 
+## How fast a move happens
+
+There is no speed register. The driver boards' SPI frame carries
+`{ mode, position, torque, kp, kd }` and nothing else — `robot::flush()` builds
+it from a position plus a fixed current cap. A joint always drives as hard as
+its position loop asks, so a plain `mpx_joint_to()` or `mpx_foot_to()` is
+*always* full speed: it creates the whole error at once.
+
+A slower move is the same command fed in gradually. Every `_to` has a `_move`
+that does exactly that, with one extra argument:
+
+```c
+mpx_foot_to  (MPX_FR, 30.0f, 0.0f, -50.0f);          /* now          */
+mpx_foot_move(MPX_FR, 30.0f, 0.0f, -50.0f, 40.0f);   /* at 40 mm/s   */
+
+mpx_feet_to  (0.0f, 0.0f, -52.0f);                   /* now          */
+mpx_feet_move(0.0f, 0.0f, -52.0f, 40.0f);            /* at 40 mm/s   */
+
+mpx_joint_to  (MPX_FR_KNEE, -25.0f);                 /* now (+ send) */
+mpx_joint_move(MPX_FR_KNEE, -25.0f, 60.0f);          /* at 60 deg/s  */
+```
+
+`_move` blocks until it arrives and sends its own frames, so it replaces a
+frame loop rather than living inside one. Speed `0` means as fast as it goes,
+which is the `_to` version.
+
+For choreography — several waypoints, custom easing, four feet on different
+paths — `mpx/motion.h` works in **times** instead: `mpx_stance_glide()`,
+`mpx_pose_glide()`, `mpx_stance_play()`. Time is the right unit there, because
+what makes separate limbs look deliberate is landing together.
+
+Body attitude is the exception with a real hardware speed: `mpx_body_speed()`
+is a deg/s limit enforced by the firmware's gait task, not the servo bus.
+
 ## Units — degrees, everywhere that matters
 
 | | |
@@ -86,6 +120,7 @@ z. About −70 mm is standing.
 | Foot positions | **millimetres** |
 | Body attitude | **degrees** |
 | Walk speed | **mm/s** |
+| Move speed | **deg/s** at a joint, **mm/s** at a foot |
 | Time | **milliseconds** |
 
 Centre is `0` and means something physical: **all twelve joints centred is the
@@ -242,7 +277,7 @@ mpx_joint_at(MPX_FR_KNEE);            /* measured angle, degrees   */
 ```
 
 **Close loops on `mpx_joint_at()`.** It is in the same frame as
-`mpx_joint_to()`. The raw `mpx_joint_raw()` is in the opposite frame, and a loop
+`mpx_joint_to()`. `robot_read_position()` in mpx/abi.h is the opposite frame, and a loop
 built on it diverges instead of converging.
 
 ## Giving it a name the robot knows

@@ -51,11 +51,7 @@ extern "C" {
  *  Stances — where the feet are
  * ═══════════════════════════════════════════════════════════════════════════ */
 
-typedef struct {
-    float x;      /**< mm, forward positive.                      */
-    float splay;  /**< degrees, sideways at the hip.              */
-    float z;      /**< mm, down from the hip, so negative.        */
-} mpx_footpos_t;
+/* mpx_footpos_t lives in mpx/leg.h, next to the feet it describes. */
 
 typedef struct {
     mpx_footpos_t leg[4];   /**< Indexed by mpx_leg_t: FR, FL, RR, RL. */
@@ -96,6 +92,20 @@ static inline mpx_stance_t mpx_stance_lift(mpx_stance_t s, mpx_leg_t leg,
 {
     s.leg[leg].z += lift_mm;
     s.leg[leg].x += forward_mm;
+    return s;
+}
+
+/** One foot placed absolutely, the other three untouched.
+ *
+ *  For BUILDING a stance to put in a timeline. To simply move one foot at a
+ *  speed, you want mpx_foot_move() in mpx/leg.h — it needs none of this.
+ *  mpx_stance_lift() is the relative version of the same idea. */
+static inline mpx_stance_t mpx_stance_with(mpx_stance_t s, mpx_leg_t leg,
+                                           float x_mm, float splay_deg, float z_mm)
+{
+    s.leg[leg].x     = x_mm;
+    s.leg[leg].splay = splay_deg;
+    s.leg[leg].z     = z_mm;
     return s;
 }
 
@@ -341,6 +351,32 @@ static inline int mpx_stance_glide(mpx_stance_t from, mpx_stance_t to,
     k[0].t_ms = 0;             k[0].stance = from; k[0].ease = MPX_EASE_LINEAR;
     k[1].t_ms = (unsigned)ms;  k[1].stance = to;   k[1].ease = e;
     return mpx_stance_play(k, 2, mpx_play(50, 1));
+}
+
+/** Travel smoothly from one JOINT pose to another, over `ms`.
+ *
+ *  The joint-side twin of mpx_stance_glide(), and the answer to "how do I set
+ *  the speed of a joint": you do not set a speed, you set a DURATION.
+ *
+ *      mpx_pose_t here = mpx_pose_now();
+ *      mpx_pose_t up   = mpx_pose_with(here, MPX_FR_SHOULDER, 20.0f);
+ *      mpx_pose_glide(here, up, 1200, MPX_EASE_INOUT);     // 1.2 s
+ *
+ *  Duration rather than degrees-per-second on purpose. Twelve joints moving
+ *  different distances at the same deg/s finish at twelve different moments,
+ *  and a robot whose legs stop one after another looks broken. Given a
+ *  duration they all arrive together, which is what you meant.
+ *
+ *  If you do think in deg/s, the conversion is one line:
+ *      ms = (int)(fabsf(to - from) / dps * 1000.0f);
+ */
+static inline int mpx_pose_glide(mpx_pose_t from, mpx_pose_t to,
+                                 int ms, mpx_ease_t e)
+{
+    mpx_pose_key_t k[2];
+    k[0].t_ms = 0;             k[0].pose = from; k[0].ease = MPX_EASE_LINEAR;
+    k[1].t_ms = (unsigned)ms;  k[1].pose = to;   k[1].ease = e;
+    return mpx_pose_play(k, 2, mpx_play(50, 1));
 }
 
 /** Oscillate one value as a sine over time — the cheapest way to make

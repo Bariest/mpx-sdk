@@ -187,24 +187,20 @@
       "area": "joints"
     },
     "set_servo_speed": {
-      "status": "exposed",
-      "sdk": [
-        "mpx_joint_speed"
-      ],
+      "status": "withheld",
       "abi": [
         "robot_set_servo_speed"
       ],
-      "area": "joints"
+      "area": "joints",
+      "why": "Dead in the firmware. The driver boards' SPI frame has no speed field — robot::flush() builds it from position plus a fixed current cap and never reads goal_speed. The SDK used to wrap this as mpx_joint_speed(); it returned MPX_OK and changed nothing, which is worse than not existing. Move a joint at a chosen speed by stepping mpx_joint_to() on a ticker."
     },
     "set_all_servo_speed": {
-      "status": "exposed",
-      "sdk": [
-        "mpx_joints_speed"
-      ],
+      "status": "withheld",
       "abi": [
         "mpx_set_all_servo_speed"
       ],
-      "area": "joints"
+      "area": "joints",
+      "why": "Dead in the firmware. The driver boards' SPI frame has no speed field — robot::flush() builds it from position plus a fixed current cap and never reads goal_speed. The SDK used to wrap this as mpx_joint_speed(); it returned MPX_OK and changed nothing, which is worse than not existing. Move a joint at a chosen speed by stepping mpx_joint_to() on a ticker."
     },
     "flush": {
       "status": "exposed",
@@ -230,14 +226,12 @@
     },
     "read_position": {
       "status": "exposed",
-      "sdk": [
-        "mpx_joint_raw"
-      ],
+      "sdk": [],
       "abi": [
         "robot_read_position"
       ],
       "area": "sensing",
-      "note": "Raw 0-1023 in the absolute frame. mpx_joint_at() is what you want for a control loop."
+      "note": "Raw 0-1023 in the ABSOLUTE frame. Deliberately has no mpx_ wrapper: mpx_joint_at() is the reading that matches mpx_joint_to(), and a wrapper next to it invited loops built across the two frames. Reachable as robot_read_position() from mpx/abi.h for diagnostics."
     },
     "read_speed": {
       "status": "exposed",

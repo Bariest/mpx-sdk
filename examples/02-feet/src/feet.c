@@ -11,6 +11,8 @@
  *
  *     Based on:  mpx/leg.h       (mpx_foot_to, mpx_frame_send)
  *                mpx/geometry.h  (the robot's real dimensions)
+ *                mpx/leg.h       (mpx_foot_move, mpx_feet_move — same calls,
+ *                                 plus a speed)
  */
 #include "mpx.h"
 
@@ -19,7 +21,7 @@
  *        +x forward          x   mm, forward positive
  *          ↑                 splay  degrees, sideways swing at the hip
  *          │                 z   mm, UP positive — so a foot on the floor
- *     hip ─┼──→ +y left          is NEGATIVE. About -70 is standing.
+ *     hip ─┼──→ +y left          is NEGATIVE. MPX_STAND_Z_MM is -70.
  *          │
  *          ↓ foot at z ≈ -70
  */
@@ -66,6 +68,36 @@ MPX_EXPORT void on_start(void)
         mpx_foot_to(MPX_FR, reach, 0.0f, STAND + lift);
         mpx_sleep(20);
     }
+
+    /* ── E. The same moves, but you name the SPEED ───────────────────────
+     * Everything above hand-wrote its own loop: pick a z, sleep 25 ms, pick
+     * the next z. That IS speed on this robot. THERE IS NO SPEED REGISTER —
+     * the driver boards take a position and a current cap and have no speed
+     * field, so a joint always drives as hard as its position loop asks. A
+     * plain mpx_foot_to() is therefore always full speed: it creates the whole
+     * error at once. Slower means feeding the target in gradually.
+     *
+     * Which is what those loops were doing by hand — so the SDK does it for
+     * you. Same call, one more argument. */
+    mpx_feet_move(0.0f, 0.0f, STAND - 18.0f, 40.0f);   /* crouch at 40 mm/s */
+    mpx_feet_move(0.0f, 0.0f, STAND,         40.0f);   /* and back up       */
+
+    /* One foot, at a speed — no loop, no bookkeeping. It starts from wherever
+     * this skill last put that foot, which the SDK remembers for you. */
+    mpx_foot_move(MPX_FR, 30.0f, 0.0f, -50.0f, 40.0f);   /* reach out */
+    mpx_foot_move(MPX_FR,  0.0f, 0.0f, STAND,  40.0f);   /* and back  */
+
+    /* mm/s is real: 36 mm of travel at 40 mm/s takes about 900 ms, and the
+     * SAME call with 80.0f takes half as long. Pass 0 to mean "as fast as it
+     * goes", which is exactly mpx_foot_to().
+     *
+     * With four feet the speed applies to whichever travels FURTHEST and the
+     * rest are slowed to match, so the pose lands in one piece. Per-foot speed
+     * would finish four feet at four different moments.
+     *
+     * _move BLOCKS and sends its own frames, so it replaces a loop like the
+     * ones above rather than going inside one. When you need several waypoints
+     * or your own easing, mpx/motion.h works in times instead of speeds. */
 
     mpx_feet_stand();
     MPX_LOG("done");
