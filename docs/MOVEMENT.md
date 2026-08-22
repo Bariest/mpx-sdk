@@ -117,8 +117,8 @@ because attitude is slewed away from the servo bus.
 
 | | |
 |---|---|
-| Joint angles | **degrees** from centre, ±135° |
-| Foot positions | **millimetres** |
+| Joint angles | **degrees** from centre. Clamped per joint: hip ±25, shoulder ±50, knee ±60 |
+| Foot positions | **millimetres** from the standing pose, up positive — `0` is standing |
 | Body attitude | **degrees** |
 | Walk speed | **mm/s** |
 | Move speed | **deg/s** at a joint, **mm/s** at a foot |

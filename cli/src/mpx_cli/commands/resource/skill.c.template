@@ -35,8 +35,8 @@ MPX_EXPORT void on_start(void)
      * places one foot and leaves the other three where they are, so a stance is
      * built by naming exactly what moves. */
     mpx_stance_t down = mpx_stance_stand();
-    down = mpx_stance_with(down, MPX_FR, reach, 0.0f, -55.0f);
-    down = mpx_stance_with(down, MPX_FL, reach, 0.0f, -55.0f);
+    down = mpx_stance_with(down, MPX_FR, reach, 0.0f, 15.0f);
+    down = mpx_stance_with(down, MPX_FL, reach, 0.0f, 15.0f);
 
     mpx_stance_key_t bow[] = {{
         {{    0, mpx_stance_stand(), MPX_EASE_LINEAR }},

@@ -88,6 +88,12 @@ static inline int mpx_bus_held(void)    { return servo_is_locked(); }
  * constants rather than from a number you remember. */
 #define MPX_KP_STOCK           65.0f      /* position P                       */
 #define MPX_KD_STOCK          800.0f      /* position D                       */
+
+/* Ceilings for the position loop. Four times stock is already a very stiff
+ * joint; past that you are not tuning, you are typing. mpx_gain_set() clamps
+ * to these silently rather than refusing, so a frame loop keeps its rate. */
+#define MPX_KP_MAX            260.0f      /* 4x stock                         */
+#define MPX_KD_MAX           3200.0f      /* 4x stock                         */
 #define MPX_KP_CURRENT_STOCK    0.0006f   /* current P — note the scale       */
 #define MPX_KFF_CURRENT_STOCK   0.00022f  /* current feed-forward             */
 
@@ -105,9 +111,18 @@ static inline int mpx_bus_held(void)    { return servo_is_locked(); }
  *
  *  Writes are slow — a driver-board config exchange, milliseconds each. Set
  *  them once, outside your motion loop. Returns the first error, or MPX_OK. */
-static inline int mpx_gain_set(mpx_joint_t j, mpx_param_t p, float v)
+static inline int mpx_gain_set_(mpx_joint_t j, mpx_param_t p, float v)
 {
+    /* CLAMPED, NOT TRUSTED. The gate below makes a gain write deliberate; it
+     * does not make the number sane. Kp 6500 instead of 65 is one slipped key,
+     * and the joint answers by trying to correct a tenth of a degree with
+     * everything it has -- it screams, heats, and hammers its own gearbox. A
+     * skill cannot ask for that here whatever it types. */
     if (p == MPX_PARAM_MAX_PWM_DUTY_CYCLE) v = mpx_clamp(v, 0.0f, 1.0f);
+    if (p == MPX_PARAM_KP_POSITION)  v = mpx_clamp(v, 0.0f, MPX_KP_MAX);
+    if (p == MPX_PARAM_KD_POSITION)  v = mpx_clamp(v, 0.0f, MPX_KD_MAX);
+    if (p == MPX_PARAM_KP_CURRENT)   v = mpx_clamp(v, 0.0f, MPX_KP_CURRENT_STOCK  * 8.0f);
+    if (p == MPX_PARAM_KFF_CURRENT)  v = mpx_clamp(v, 0.0f, MPX_KFF_CURRENT_STOCK * 8.0f);
 
     if (j == MPX_ALL_JOINTS) {
         /* EVERY joint is attempted, and the worst result is reported.
@@ -132,6 +147,38 @@ static inline int mpx_gain_set(mpx_joint_t j, mpx_param_t p, float v)
     return servo_set_gain((int)j, (int)p, v);
 }
 
+/* ── THE GATE ──────────────────────────────────────────────────────────────
+ *
+ * Writing a gain is the one thing in this SDK that can damage the robot with a
+ * single well-formed call. Everything else is clamped into a shape the chassis
+ * survives; a gain IS the clamp, so nothing sits underneath it.
+ *
+ * So it is not on by default. Put this above your include and you have it:
+ *
+ *     #define MPX_TUNE_MOTORS
+ *     #include "mpx.h"
+ *
+ * That is the whole mechanism. It is not security -- anyone can type the line.
+ * It is a line you cannot type BY ACCIDENT, which is the failure that actually
+ * happens: someone copies a snippet, does not know Kp from Kd, and leaves one
+ * joint stiff enough to fight every gait afterwards. Writing the words
+ * "tune motors" in your own file is the point.
+ *
+ * Without it, mpx_gain_set() and mpx_gain_save() do not exist, and the
+ * compiler says so by name.
+ */
+#ifdef MPX_TUNE_MOTORS
+#define mpx_gain_set  mpx_gain_set_
+#define mpx_gain_save mpx_gain_save_
+#else
+/* A bare UNDECLARED IDENTIFIER, not a call to an undeclared function. An
+ * implicit function call is only a warning on some compilers, and a safety
+ * gate that some toolchains reduce to a warning is not a gate. This is a hard
+ * error everywhere, and the error text is the instruction. */
+#define mpx_gain_set(...)  MPX_ERROR_gain_writes_need_define_MPX_TUNE_MOTORS
+#define mpx_gain_save(...) MPX_ERROR_gain_writes_need_define_MPX_TUNE_MOTORS
+#endif
+
 /** Read one parameter back from one joint. Not valid with MPX_ALL_JOINTS —
  *  twelve joints have twelve answers and one float to put them in. */
 static inline int mpx_gain_get(mpx_joint_t j, mpx_param_t p, float *out)
@@ -149,20 +196,20 @@ static inline int mpx_gain_get(mpx_joint_t j, mpx_param_t p, float *out)
 static inline int mpx_gains_stock(void)
 {
     int worst = MPX_OK, rc;
-    rc = mpx_gain_set(MPX_ALL_JOINTS, MPX_PARAM_KP_POSITION,  MPX_KP_STOCK);
+    rc = mpx_gain_set_(MPX_ALL_JOINTS, MPX_PARAM_KP_POSITION,  MPX_KP_STOCK);
     if (rc != MPX_OK) worst = rc;
-    rc = mpx_gain_set(MPX_ALL_JOINTS, MPX_PARAM_KD_POSITION,  MPX_KD_STOCK);
+    rc = mpx_gain_set_(MPX_ALL_JOINTS, MPX_PARAM_KD_POSITION,  MPX_KD_STOCK);
     if (rc != MPX_OK) worst = rc;
-    rc = mpx_gain_set(MPX_ALL_JOINTS, MPX_PARAM_KP_CURRENT,   MPX_KP_CURRENT_STOCK);
+    rc = mpx_gain_set_(MPX_ALL_JOINTS, MPX_PARAM_KP_CURRENT,   MPX_KP_CURRENT_STOCK);
     if (rc != MPX_OK) worst = rc;
-    rc = mpx_gain_set(MPX_ALL_JOINTS, MPX_PARAM_KFF_CURRENT,  MPX_KFF_CURRENT_STOCK);
+    rc = mpx_gain_set_(MPX_ALL_JOINTS, MPX_PARAM_KFF_CURRENT,  MPX_KFF_CURRENT_STOCK);
     if (rc != MPX_OK) worst = rc;
     return worst;
 }
 
 /** Persist this joint's gains to the driver board's flash. Survives a reboot —
  *  which is exactly why you should be sure first. */
-static inline int mpx_gain_save(mpx_joint_t j)    { return servo_save_config((int)j); }
+static inline int mpx_gain_save_(mpx_joint_t j)   { return servo_save_config((int)j); }
 /** Reload the joint's gains from its flash, discarding run-time changes. */
 static inline int mpx_gain_restore(mpx_joint_t j) { return servo_restore_config((int)j); }
 

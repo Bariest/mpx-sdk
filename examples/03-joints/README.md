@@ -59,7 +59,7 @@ To get joint angles for a foot position, ask the robot rather than modelling
 it:
 
 ```c
-mpx_foot_set(MPX_FR, 20.0f, 0.0f, MPX_STAND_Z_MM + 14.0f);
+mpx_foot_set(MPX_FR, 20.0f, 0.0f, 14.0f);   /* 14 mm above standing */
 mpx_frame_send();
 mpx_sleep(300);
 

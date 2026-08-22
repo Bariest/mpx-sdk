@@ -36,7 +36,7 @@ is below the hip, therefore standing is a negative number.
 
 ```c
 mpx_feet_set(0.0f, 0.0f, MPX_STAND_Z_MM);        /* all four, same place */
-mpx_foot_set(MPX_FR, 20.0f, 0.0f, -55.0f);       /* one leg              */
+mpx_foot_set(MPX_FR, 20.0f, 0.0f, 15.0f);        /* one leg, 15 mm up    */
 ```
 
 `MPX_STAND_Z_MM` and the robot's link lengths come from `mpx/geometry.h`,

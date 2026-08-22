@@ -37,8 +37,11 @@
  *  the IK has no solution — {@link mpx_foot_set} clamps rather than failing. */
 #define MPX_REACH_MM      (MPX_THIGH_MM + MPX_CALF_MM)
 
-/** A safe, normal standing foot height. Negative because z is up. */
-#define MPX_STAND_Z_MM    (-MPX_NEUTRAL_Z_MM)
+/** The standing pose. Zero, because foot z is measured FROM standing --
+ *  the same 0 that means standing for joints and for body attitude.
+ *  Kept as a name so `mpx_foot_set(leg, 0, 0, MPX_STAND_Z_MM)` still reads
+ *  as intent rather than as a magic number. */
+#define MPX_STAND_Z_MM    0.0f
 
 /** Widest angle any joint accepts, either side of centre. Enforced by the
  *  firmware; asking for more is clamped, not an error. */

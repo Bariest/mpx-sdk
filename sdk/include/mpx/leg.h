@@ -29,8 +29,8 @@
  * ── FRAMES ─────────────────────────────────────────────────────────────────
  * Writes are buffered. Nothing moves until the frame is sent:
  *
- *     mpx_foot_set(MPX_FL, 0, 0, -78);
- *     mpx_foot_set(MPX_FR, 0, 0, -78);
+ *     mpx_foot_set(MPX_FL, 0, 0, 0);
+ *     mpx_foot_set(MPX_FR, 0, 0, 0);
  *     mpx_frame_send();                 <- one send, after all the writes
  *
  * One send per frame, not one per joint. Sending per joint puts each servo on
@@ -77,6 +77,67 @@ typedef enum {
     MPX_RR_HIP = 7,  MPX_RR_SHOULDER = 8,  MPX_RR_KNEE = 9,
     MPX_RL_HIP = 10, MPX_RL_SHOULDER = 11, MPX_RL_KNEE = 12,
 } mpx_joint_t;
+
+/* How far a foot may travel from the standing pose, in mm. The firmware's own
+ * movements use -30 (its tallest, _ik(0,0,100)) to +30 (the jump crouch,
+ * crouchZ = 40), so the safe band is exactly the band the robot already
+ * lives in. Past -36 the leg is straight and the IK has no solution: it stops
+ * moving out while your numbers keep growing, which is worse than a limit. */
+#ifndef MPX_FOOT_Z_MIN_MM
+#define MPX_FOOT_Z_MIN_MM  (-32.0f)   /**< leg extended, body high */
+#endif
+#ifndef MPX_FOOT_Z_MAX_MM
+#define MPX_FOOT_Z_MAX_MM   (34.0f)   /**< leg folded, body low    */
+#endif
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ *  SAFE TRAVEL — how far a joint may go before it hits the robot
+ *
+ *  MPX_JOINT_LIMIT_DEG is 135, and that is the SERVO's range, not the ROBOT's.
+ *  A shoulder at 135 degrees has swung the leg into the body. Nothing stopped
+ *  it, because the only clamp anywhere was the one the driver board applies to
+ *  protect itself.
+ *
+ *  These are the robot's limits. Measured against what the firmware's own
+ *  movements ask for — every built-in gait, INCLUDING jump, stays inside:
+ *
+ *      foot 30 mm above standing (jump crouch)   shoulder  +24   knee  -15
+ *      foot 30 mm below standing (tallest)       shoulder  -25   knee  +20
+ *      x sweep of +/-40 mm                       shoulder  -39..+21
+ *                                                knee      -22..+37
+ *      every gait's hip                          0 — the built-ins never
+ *                                                use the hip at all
+ *
+ *  So the defaults below are comfortably wider than everything the robot
+ *  already does, and much narrower than what would damage it.
+ *
+ *  THEY ARE PROVISIONAL. They come from the software's envelope, not from a
+ *  tape measure on your chassis. examples/07-limits walks one joint outward in
+ *  small steps, on a stand, and tells you where it actually stops. Widen or
+ *  narrow them for your build:
+ *
+ *      #define MPX_SHOULDER_LIMIT_DEG 70.0f
+ *      #include "mpx.h"
+ */
+#ifndef MPX_HIP_LIMIT_DEG
+#define MPX_HIP_LIMIT_DEG       25.0f  /**< Sideways at the hip.        */
+#endif
+#ifndef MPX_SHOULDER_LIMIT_DEG
+#define MPX_SHOULDER_LIMIT_DEG  50.0f  /**< Swings the leg fore/aft.    */
+#endif
+#ifndef MPX_KNEE_LIMIT_DEG
+#define MPX_KNEE_LIMIT_DEG      60.0f  /**< Folds the leg.              */
+#endif
+
+/** How far this joint may travel from centre, in degrees. */
+static inline float mpx_joint_limit(mpx_joint_t j)
+{
+    switch (((int)j - 1) % 3) {
+    case 0:  return MPX_HIP_LIMIT_DEG;
+    case 1:  return MPX_SHOULDER_LIMIT_DEG;
+    default: return MPX_KNEE_LIMIT_DEG;
+    }
+}
 
 /** The joint at `part` on `leg` — so a leg can be a loop variable. */
 static inline mpx_joint_t mpx_joint(mpx_leg_t leg, mpx_part_t part)
@@ -151,8 +212,17 @@ static inline mpx_joint_t mpx_joint(mpx_leg_t leg, mpx_part_t part)
  *
  *      x      mm, forward positive, back negative
  *      splay  degrees, sideways swing at the hip
- *      z      mm, measured DOWN from the hip, so it is negative.
- *             MPX_STAND_Z_MM (-70) is standing; less negative is a crouch.
+ *      z      mm from the STANDING pose, up positive.
+ *               0   standing — the same 0 that means standing everywhere
+ *                   else in this SDK: all twelve joints at 0, body at 0,0,0
+ *             +18   the foot is 18 mm higher, so the body sits 18 mm lower
+ *                   (a crouch, when all four do it)
+ *             -14   the leg reaches further down and the body rises
+ *
+ *             It used to be measured from the hip, so standing was -70 and
+ *             "less negative" was a crouch -- a sign and an offset to hold in
+ *             your head before you could place a foot, in the one part of the
+ *             SDK where 0 did not already mean standing.
  * ═══════════════════════════════════════════════════════════════════════════ */
 
 /** Place one foot. z is UP-positive, so a foot below its hip is negative.
@@ -200,7 +270,10 @@ static inline int mpx_foot_set(mpx_leg_t leg, float x_mm, float splay_deg, float
     mpx_foot_last_[leg].x     = x_mm;
     mpx_foot_last_[leg].splay = splay_deg;
     mpx_foot_last_[leg].z     = z_mm;
-    return mpx_foot((int)leg, x_mm, splay_deg, -z_mm);
+    /* z is measured FROM THE STANDING POSE, up positive. The firmware wants
+     * distance DOWN from the hip, so standing (its +70) is our 0. */
+    z_mm = mpx_clamp(z_mm, MPX_FOOT_Z_MIN_MM, MPX_FOOT_Z_MAX_MM);
+    return mpx_foot((int)leg, x_mm, splay_deg, MPX_NEUTRAL_Z_MM - z_mm);
 }
 
 /** Put all four feet in the same place relative to their own hips. */
@@ -228,7 +301,11 @@ static inline int mpx_feet_set(float x_mm, float splay_deg, float z_mm)
  *  easing curve should sit at the limit, not abandon the frame. */
 static inline int mpx_joint_set(mpx_joint_t j, float deg)
 {
-    deg = mpx_clamp(deg, -MPX_JOINT_LIMIT_DEG, MPX_JOINT_LIMIT_DEG);
+    /* Clamped to what the ROBOT can take, not what the servo will accept.
+     * Clamped rather than refused: a pose that overshoots by a degree because
+     * of an easing curve should sit at the limit, not abandon the frame. */
+    const float lim = mpx_joint_limit(j);
+    deg = mpx_clamp(deg, -lim, lim);
     return robot_set_servo_angle((int)j, (int)(deg * 100.0f));
 }
 

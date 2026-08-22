@@ -1,0 +1,38 @@
+{
+  "slug": "limits",
+  "title": "07 — Find your robot's real joint limits",
+  "skill_type": "WASM",
+  "version": "1.0.0",
+  "abi": 4,
+  "readme": "Walk one joint outward in small steps, on a stand, and watch where it stops.",
+  "params": [
+    {
+      "name": "joint",
+      "type": "int",
+      "default": 2,
+      "min": 1,
+      "max": 12
+    },
+    {
+      "name": "step",
+      "type": "float",
+      "default": 5.0,
+      "min": 1,
+      "max": 15
+    },
+    {
+      "name": "hold",
+      "type": "int",
+      "default": 900,
+      "min": 200,
+      "max": 3000
+    },
+    {
+      "name": "max",
+      "type": "float",
+      "default": 90.0,
+      "min": 5,
+      "max": 135
+    }
+  ]
+}

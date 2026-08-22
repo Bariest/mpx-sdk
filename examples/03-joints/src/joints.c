@@ -44,7 +44,7 @@ MPX_EXPORT void on_start(void)
      * judders, because each send is a separate bus transaction. */
     mpx_joint_set(MPX_FR_SHOULDER, 20.0f);
     mpx_joint_set(MPX_FR_KNEE,    -25.0f);
-    mpx_frame_send();                       /* ← once per frame */
+    mpx_frame_send();                        /* ← once per frame */
     mpx_sleep(700);
 
     /* ── B. Solving a leg yourself ───────────────────────────────────────
@@ -62,7 +62,7 @@ MPX_EXPORT void on_start(void)
      * If you want the joint angles for a foot position, do not model the leg.
      * ASK THE ROBOT: place the foot, then read the joints back. Whatever the
      * firmware does, this agrees with it, forever. */
-    mpx_foot_set(MPX_FR, 20.0f, 0.0f, MPX_STAND_Z_MM + 14.0f);
+    mpx_foot_set(MPX_FR, 20.0f, 0.0f, 14.0f);   /* 14 mm above standing */
     mpx_frame_send();
     mpx_sleep(300);
 

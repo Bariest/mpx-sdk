@@ -20,10 +20,10 @@
  *
  *        +x forward          x   mm, forward positive
  *          ↑                 splay  degrees, sideways swing at the hip
- *          │                 z   mm, UP positive — so a foot on the floor
- *     hip ─┼──→ +y left          is NEGATIVE. MPX_STAND_Z_MM is -70.
- *          │
- *          ↓ foot at z ≈ -70
+ *          │                 z   mm from STANDING, up positive. 0 is the
+ *     hip ─┼──→ +y left          stand; +18 lifts the foot (body crouches);
+ *          │                     -14 pushes it down (body rises).
+ *          ↓ z = 0 is standing
  */
 
 MPX_EXPORT void on_start(void)
@@ -97,13 +97,13 @@ MPX_EXPORT void on_start(void)
      *
      * Which is what those loops were doing by hand — so the SDK does it for
      * you. Same call, one more argument. */
-    mpx_feet_move(0.0f, 0.0f, STAND - 18.0f, 40.0f);   /* crouch at 40 mm/s */
+    mpx_feet_move(0.0f, 0.0f, STAND + 18.0f, 40.0f);   /* crouch at 40 mm/s */
     mpx_feet_move(0.0f, 0.0f, STAND,         40.0f);   /* and back up       */
 
     /* One foot, at a speed — no loop, no bookkeeping. It starts from wherever
      * this skill last put that foot, which the SDK remembers for you. */
-    mpx_foot_move(MPX_FR, 30.0f, 0.0f, -50.0f, 40.0f);   /* reach out */
-    mpx_foot_move(MPX_FR,  0.0f, 0.0f, STAND,  40.0f);   /* and back  */
+    mpx_foot_move(MPX_FR, 30.0f, 0.0f, 20.0f, 40.0f);    /* reach out and up */
+    mpx_foot_move(MPX_FR,  0.0f, 0.0f, STAND, 40.0f);    /* and back         */
 
     /* mm/s is real: 36 mm of travel at 40 mm/s takes about 900 ms, and the
      * SAME call with 80.0f takes half as long. Pass 0 to mean "as fast as it

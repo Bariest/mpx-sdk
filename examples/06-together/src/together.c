@@ -29,6 +29,7 @@
  *     mpx-cli trace                # watch it level itself
  *     mpx-cli stop                 # the only way a behaviour ends
  */
+#define MPX_TUNE_MOTORS   /* be_pattable() writes gains */
 #include "mpx.h"
 
 static float s_gain;
@@ -50,7 +51,7 @@ static void bow(void)
 {
     mpx_stance_key_t keys[] = {
         {    0, mpx_stance_stand(),              MPX_EASE_LINEAR },
-        {  650, front_reach(22.0f, -52.0f),      MPX_EASE_INOUT  },
+        {  650, front_reach(22.0f, 18.0f),       MPX_EASE_INOUT  },
         { 1500, mpx_stance_stand(),              MPX_EASE_OUT    },
     };
     mpx_stance_play(keys, 3, mpx_play(50, 1));

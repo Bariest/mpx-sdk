@@ -21,6 +21,15 @@
  *     Based on:  mpx/bus.h      (mpx_bus_take, mpx_gain_set, mpx_bus_apply)
  *                mpx/params.h   (the driver-board slots, generated)
  */
+/* THE LINE THAT UNLOCKS THIS LAYER. Without it mpx_gain_set() and
+ * mpx_gain_save() do not exist and the compiler says so by name.
+ *
+ * It is not security — you just typed it, and so can anyone. It is a line you
+ * cannot type BY ACCIDENT, which is the failure that actually happens: a
+ * snippet gets copied, Kp and Kd get confused, and one joint is left stiff
+ * enough to make every gait afterwards walk wrong with nothing on screen to
+ * explain it. Writing "tune motors" in your own file is the point. */
+#define MPX_TUNE_MOTORS
 #include "mpx.h"
 
 MPX_EXPORT void on_start(void)
